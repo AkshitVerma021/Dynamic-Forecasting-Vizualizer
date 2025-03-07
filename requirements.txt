@@ -1,7 +1,8 @@
-pandas>=2.0.0
-numpy>=1.21.0
-matplotlib>=3.5.0
-streamlit>=1.22.0
-chardet>=5.0.0
-statsmodels>=0.13.0
-scikit-learn>=1.0.0
+streamlit
+pandas
+numpy
+matplotlib
+chardet
+hashlib
+statsmodels
+scikit-learn
