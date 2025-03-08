@@ -19,4 +19,4 @@ source myenv/bin/activate
 pip install -r requirements.txt
 
 # Run Streamlit app
-streamlit run your_script.py --server.address 0.0.0.0
+streamlit run main.py --server.address 0.0.0.0
