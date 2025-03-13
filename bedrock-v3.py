@@ -153,7 +153,7 @@ if dataframes:
     user_input = st.sidebar.text_input("Ask a question about your datasets:")
 
     def query_bedrock(user_input, combined_df):
-        df_sample = combined_df.head(50).to_json()
+        df_sample = combined_df.head(20).to_json()
 
         prompt = f"""
         You are an AI assistant analyzing multiple datasets:
