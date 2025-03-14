@@ -152,7 +152,7 @@ if dataframes:
 
     user_input = st.sidebar.text_input("Ask a question about your datasets:")
 
-    def query_bedrock(user_input, combined_df):
+    def query_bedrock_stream(user_input, combined_df):
         df_sample = combined_df.head(20).to_json()
 
         prompt = f"""
@@ -175,33 +175,42 @@ if dataframes:
         }
 
         try:
-            response = bedrock_client.invoke_model(
+            response = bedrock_client.invoke_model_with_response_stream(
                 body=json.dumps(payload),
                 modelId="anthropic.claude-instant-v1",
                 accept="application/json",
                 contentType="application/json"
             )
 
-            response_body = json.loads(response["body"].read())
-            return response_body["completion"]
+            stream = response["body"]
+            return stream
 
         except Exception as e:
             return f"❌ Error: {str(e)}"
 
     if user_input:
         if uploaded_files:
-            response = query_bedrock(user_input, combined_df)
-            chat_history.insert(0, {"question": user_input, "answer": response})  # Latest message at top
+            stream = query_bedrock_stream(user_input, combined_df)
+            if isinstance(stream, str):  # Error case
+                chat_history.insert(0, {"question": user_input, "answer": stream})
+            else:
+                # Stream the response in real-time
+                st.sidebar.write("### 💬 Latest Chat")
+                st.sidebar.write(f"**🗨 {user_input}**")
+                response_container = st.sidebar.empty()
+                full_response = ""
+                for event in stream:
+                    chunk = event.get("chunk")
+                    if chunk:
+                        chunk_data = json.loads(chunk.get("bytes").decode())
+                        chunk_text = chunk_data.get("completion", "")
+                        full_response += chunk_text
+                        response_container.markdown(f"🤖 {full_response}")
+                chat_history.insert(0, {"question": user_input, "answer": full_response})
+
+            # Save chat history
             with open(CHAT_HISTORY_FILE, "w") as f:
                 json.dump(chat_history, f)
-
-    # Display Latest Chat in Sidebar
-    if chat_history:
-        st.sidebar.write("### 💬 Latest Chat")
-        latest_chat = chat_history[0]
-        st.sidebar.write(f"**🗨 {latest_chat['question']}**")
-        st.sidebar.write(f"🤖 {latest_chat['answer']}")
-        st.sidebar.write("---")
 
     # Display Chat History in Expander (Dropdown)
     if len(chat_history) > 1:  # Only show expander if there is more than one chat
