@@ -53,6 +53,5 @@ This Streamlit application provides powerful data analysis and forecasting capab
 # This application combines modern data science techniques with user-friendly interfaces to provide comprehensive data analysis capabilities.
 
 <img width="1679" alt="Screenshot 2025-03-20 at 6 59 58 PM" src="https://github.c<img width="1680" alt="Screenshot 2025-03-20 at 7 00 54 PM" src="https://github.com/user-attachments/assets/39233a68-593f-47cd-9947-04c609e51d50" />
-om/user-attachments/assets/1d74148f-01a0-44d1-8fb8-988c7e45823a" />
 <img width="860" alt="Screenshot 2025-03-20 at 7 02 11 PM" src="https://github.com/user-attachments/assets/1c3d934b-8d7f-48d5-b0f2-eaa36bb81599" />
 
