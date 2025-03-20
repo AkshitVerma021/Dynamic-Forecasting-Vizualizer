@@ -1,0 +1,12 @@
+streamlit==1.30.0
+pandas==2.2.0
+numpy==1.26.3
+matplotlib==3.8.3
+boto3==1.34.33
+jsonschema==4.20.0
+chardet==5.2.0
+speechrecognition==3.10.0
+statsmodels==0.14.0
+scikit-learn==1.4.0
+openpyxl==3.1.2
+pyarrow==14.0.1
