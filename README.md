@@ -30,8 +30,7 @@ This Streamlit application provides powerful data analysis and forecasting capab
 
 - Primary: ARIMA model for time series forecasting
 - Fallback: Random Forest Regressor for complex patterns
-- 10-day forecast generation with visualization
-
+ 
 # Chat System
 
 - Integration with AWS Bedrock for natural language processing
