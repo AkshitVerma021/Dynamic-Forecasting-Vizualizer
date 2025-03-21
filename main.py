@@ -211,7 +211,7 @@ st.sidebar.success(f"👤 Logged in as: {st.session_state.username}")
 if st.sidebar.button("🚪 Sign Out"):
     sign_out()
 
-🎙️ Convert Voice to Text
+# 🎙️ Convert Voice to Text
 def voice_to_text():
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
@@ -278,7 +278,7 @@ if uploaded_files:
 if dataframes:
     for i, df in enumerate(dataframes):
         st.write(f"### 📊 Preview of `{file_names[i]}`")
-        st.dataframe(df.head(10))
+        st.dataframe(df.head(11))
 
         # ✅ Detect Date Column
         date_col = None
@@ -388,8 +388,7 @@ if dataframes:
             st.pyplot(fig)
             
 # 🧠 Chatbot Section
-# 🧠 Chatbot Section - Moved to Bottom After Forecast
-st.subheader("🤖 Chat with Your Dataset")
+st.sidebar.header("🤖 Chat with Your Dataset")
 
 # 🗂️ Load Chat History for User
 user_chat_history_file = os.path.join(CHAT_HISTORY_DIR, f"{st.session_state.username}_chat_history.json")
@@ -403,7 +402,7 @@ else:
 def clear_chat_history():
     if os.path.exists(user_chat_history_file):
         os.remove(user_chat_history_file)
-    st.success("✅ Chat history cleared!")
+    st.sidebar.success("✅ Chat history cleared!")
     st.rerun()
 
 # 🎙️ Capture Voice or Text Input
@@ -411,17 +410,17 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = ""
 
 # 🎙️ Button to Capture Voice Input
-if st.button("🎙️ Speak"):
+if st.sidebar.button("🎙️ Speak"):
     voice_input = voice_to_text()
     if voice_input:
         st.session_state.user_input = voice_input
 
-# ✍️ Text Input Box for User Query
-user_input = st.text_input(
+# ✍️ Text Input Box (Always Available)
+user_input = st.sidebar.text_input(
     "Ask a question about your dataset:", value=st.session_state.user_input
 )
 
-# 🔥 Process User Query
+# 🔥 Query Bedrock to Analyze Dataset
 def query_bedrock_stream(user_input, df):
     df_sample = df.head(20).to_json()
 
@@ -436,7 +435,7 @@ def query_bedrock_stream(user_input, df):
 
     payload = {
         "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-        "max_tokens_to_sample": 150,
+        "max_tokens_to_sample": 300,
         "temperature": 0.5,
         "top_k": 250,
         "top_p": 1,
@@ -465,13 +464,13 @@ def query_bedrock_stream(user_input, df):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-# 📤 Process User Input and Get Response
+# 🔥 Process User Query
 if user_input:
     if dataframes:
-        selected_df_index = st.selectbox("Select Dataset to Query", file_names)
+        selected_df_index = st.sidebar.selectbox("Select Dataset to Query", file_names)
         selected_df = dataframes[file_names.index(selected_df_index)]
         response_text = query_bedrock_stream(user_input, selected_df)
-        st.markdown(
+        st.sidebar.markdown(
             f"### 💬 Latest Chat\n"
             f"🗨️ **{user_input}**\n"
             f"🤖 {response_text}"
@@ -483,23 +482,16 @@ if user_input:
         with open(user_chat_history_file, "w") as f:
             json.dump(chat_history, f)
 
-# 📜 Show/Hide Full Chat History with Clear Option
-st.subheader("📜 Chat History")
+# 📜 Show Chat History
+st.sidebar.subheader("📜 Chat History")
+if len(chat_history) > 0:
+    for chat in chat_history[:5]:
+        st.sidebar.write(f"**🗨️ {chat['question']}**")
+        st.sidebar.write(f"🤖 {chat['answer']}")
+        st.sidebar.write("---")
+else:
+    st.sidebar.write("🤖 No chat history available.")
 
-# Use a checkbox for toggle functionality to ensure single-click behavior
-show_chat_history = st.checkbox("📜 Show Chat History", value=False)
-
-# Show full chat history only if checkbox is checked
-if show_chat_history:
-    if len(chat_history) > 0:
-        st.write("### 🗨️ Previous Conversations")
-        for chat in chat_history[:10]:  # Show the last 10 chats
-            st.write(f"**🗨️ {chat['question']}**")
-            st.write(f"🤖 {chat['answer']}")
-            st.write("---")
-        
-        # 🧹 Clear Chat History Button (Visible when chat is shown)
-        if st.button("🧹 Clear Chat History"):
-            clear_chat_history()
-    else:
-        st.write("🤖 No chat history available.")
+# 🧹 Button to Clear Chat History
+if st.sidebar.button("🧹 Clear Chat History"):
+    clear_chat_history()
