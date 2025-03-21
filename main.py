@@ -211,22 +211,22 @@ st.sidebar.success(f"👤 Logged in as: {st.session_state.username}")
 if st.sidebar.button("🚪 Sign Out"):
     sign_out()
 
-# 🎙️ Convert Voice to Text
-# def voice_to_text():
-#     recognizer = sr.Recognizer()
-#     with sr.Microphone() as source:
-#         st.sidebar.write("🎙️ Listening... Please speak your query.")
-#         try:
-#             audio = recognizer.listen(source, timeout=5)
-#             user_input = recognizer.recognize_google(audio)
-#             st.sidebar.write(f"🗨️ You said: **{user_input}**")
-#             return user_input
-#         except sr.UnknownValueError:
-#             st.sidebar.error("❌ Sorry, I couldn't understand the audio.")
-#             return ""
-#         except sr.RequestError:
-#             st.sidebar.error("❌ API error. Please check internet connection.")
-#             return ""
+🎙️ Convert Voice to Text
+def voice_to_text():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        st.sidebar.write("🎙️ Listening... Please speak your query.")
+        try:
+            audio = recognizer.listen(source, timeout=5)
+            user_input = recognizer.recognize_google(audio)
+            st.sidebar.write(f"🗨️ You said: **{user_input}**")
+            return user_input
+        except sr.UnknownValueError:
+            st.sidebar.error("❌ Sorry, I couldn't understand the audio.")
+            return ""
+        except sr.RequestError:
+            st.sidebar.error("❌ API error. Please check internet connection.")
+            return ""
 
 # 📥 Sidebar for Multiple File Uploads with Progress Bar
 st.sidebar.header("📂 Upload Your Datasets")
@@ -411,10 +411,10 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = ""
 
 # 🎙️ Button to Capture Voice Input
-# if st.button("🎙️ Speak"):
-#     voice_input = voice_to_text()
-#     if voice_input:
-#         st.session_state.user_input = voice_input
+if st.button("🎙️ Speak"):
+    voice_input = voice_to_text()
+    if voice_input:
+        st.session_state.user_input = voice_input
 
 # ✍️ Text Input Box for User Query
 user_input = st.text_input(
