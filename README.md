@@ -6,11 +6,11 @@ This Streamlit application provides powerful data analysis and forecasting capab
 
 # Key Features
 
-- Multi-File Support:** Handles CSV, Excel, JSON, and Parquet files
-- Automated Date Detection:** Intelligently identifies date columns for time series analysis
-- Advanced Forecasting:** Uses ARIMA and Random Forest models for predictive analytics
-- Interactive Visualizations:** Displays forecasts vs. actual data through matplotlib
-- AI-Powered Chat:** Integrates with AWS Bedrock for dataset queries
+- Multi-File Support: Handles CSV, Excel, JSON, and Parquet files
+- Automated Date Detection: Intelligently identifies date columns for time series analysis
+- Advanced Forecasting: Uses ARIMA and Random Forest models for predictive analytics
+- Interactive Visualizations: Displays forecasts vs. actual data through matplotlib
+- AI-Powered Chat: Integrates with AWS Bedrock for dataset queries
 
 # Technical Components
 
