@@ -35,7 +35,6 @@ This Streamlit application provides powerful data analysis and forecasting capab
 
 - Integration with AWS Bedrock for natural language processing
 - Persistent chat history management
-- Voice input support for queries
 
 # Usage Requirements
 
