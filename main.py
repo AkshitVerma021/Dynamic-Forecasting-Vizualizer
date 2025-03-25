@@ -301,7 +301,7 @@ if dataframes:
         df.dropna(subset=[date_col], inplace=True)
         df = df.sort_values(by=date_col)
 
-        # ✅ Filter columns that can be used for prediction (numeric or convertible to numeric)
+        
         # ✅ Filter columns that can be used for prediction (numeric or convertible to numeric)
         valid_columns = []
         for col in df.columns:
@@ -388,7 +388,6 @@ if dataframes:
             st.pyplot(fig)
             
 # 🧠 Chatbot Section
-# 🧠 Chatbot Section - Moved to Bottom After Forecast
 st.subheader("🤖 Chat with Your Dataset")
 
 # 🗂️ Load Chat History for User
