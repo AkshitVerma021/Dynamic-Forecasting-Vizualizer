@@ -7,115 +7,26 @@ import json
 import os
 import chardet
 import hashlib
-import speech_recognition as sr
+# import speech_recognition as sr
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
+from auth import init_session_state, check_auth, sign_out
+from chatbot import chatbot_section  # ✅ Import Chatbot Section
 
 # 📌 Set Streamlit Page Config
 st.set_page_config(layout="wide")
 
-# 🎨 Apply Custom CSS
-def custom_css():
-    st.markdown(
-        """
-        <style>
-        /*  General Styles */
-        body, .stApp {
-            background-color: #DCDCDC;  /* Light Gray */
-            font-family: 'Arial', sans-serif;
-        }
+def load_css(styles):
+    with open(styles, "r") as f:
+        css_styles = f.read()
+        st.markdown(f"<style>{css_styles}</style>", unsafe_allow_html=True)
 
-        /*  Header Styles */
-        h1, h2, h3 {
-            font-size: 32px;
-            font-weight: bold;
-            color: #D7DA53;
-            text-align: center;
-            margin-top: 20px;
-            margin-bottom: 10px;
-        }
+load_css("styles.css")
 
-        /*  Sidebar Background */
-        .css-1d391kg { /* Sidebar container */
-            background-color: #556B2F !important; /* Olive Drab */
-            padding-top: 20px;
-            padding-bottom: 20px;
-        }
-
-        .css-1cpxqw2 { /* Sidebar Text Color */
-            color: #1E90FF !important;
-            font-size: 20px;
-        }
-
-        # /* 📂 Upload Widget Styles */
-        # .css-14xtw13 {
-        #     border: 1px solid #556B2F;
-        #     border-radius: 12px;
-        #     padding: 12px;
-        #     background-color: #E5F0FF;
-        #     transition: all 0.3s ease-in-out;
-        #     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        # }
-
-        /* 🔘 Button Styles */
-        .stButton > button {
-            background-color: #556B2F;
-            color: #FFFFFF;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 16px;
-            border: none;
-            # transition: all 0.3s ease-in-out;
-        }
-
-        .stButton > button:hover {
-            background-color: #556B2F;
-            box-shadow: 0 0 12px rgba(74, 144, 226, 0.8);
-        }
-
-        /* ✍️ Text Input Styles */
-        .stTextInput > div > div > input, textarea {
-            border: 1px solid #BDC3C7;
-            border-radius: 8px;
-            padding: 8px 12px;
-            background-color: #FFFFFF;
-        }
-
-        /* 📊 DataFrame Styling - Bigger Size */
-        .stDataFrame {
-            width: 100% !important;
-            height: 400px !important;  /* Bigger height */
-            border: 1px solid #008000;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-        }
-
-        /* 📊 Progress Bar Styling */
-        .stProgress > div > div > div {
-            background: linear-gradient(to right, #556B2F, #357ABD);
-            border-radius: 12px;
-        }
-        .chat-history-font {
-            font-size: 18px;  /* Increase font size here */
-            color: #333333;
-        }
-
-        /* ✅ Hide Footer */
-        footer {
-            visibility: hidden;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# 💡 Apply Custom CSS
-custom_css()
 
 # 🔥 App Title
-st.title("📊 AI-Powered Multi-File Data Analysis & Forecasting with Voice Chat")
+st.title("📊 AI-Powered Data Analysis & Forecasting with Voice Chat")
 
 # 🗄 Define Storage Directories
 STORAGE_DIR = "saved_forecasts"
@@ -126,107 +37,22 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
 
-# 🔍 AWS Bedrock Client Initialization
-def get_bedrock_client():
-    return boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+# 🔑 Initialize Session State
+init_session_state()
 
-bedrock_client = get_bedrock_client()
-
-# 🔹 Load or Initialize User Data
-if not os.path.exists(USER_DATA_FILE):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump({}, f)
-
-def load_users():
-    with open(USER_DATA_FILE, "r") as f:
-        return json.load(f)
-
-def save_users(users):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump(users, f)
-
-# 🔐 Hash Password
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# 🔐 User Authentication State
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-if "signup_mode" not in st.session_state:
-    st.session_state.signup_mode = False
-
-# 🔹 Authentication Page
-def login_page():
-    st.sidebar.subheader("🔑 User Authentication")
-    users = load_users()
-
-    if st.sidebar.button("🔄 Switch to Sign Up" if not st.session_state.signup_mode else "🔄 Switch to Login"):
-        st.session_state.signup_mode = not st.session_state.signup_mode
-        st.rerun()
-
-    if st.session_state.signup_mode:
-        st.sidebar.subheader("📝 Sign Up")
-        new_username = st.sidebar.text_input("Choose a Username")
-        new_password = st.sidebar.text_input("Choose a Password", type="password")
-
-        if st.sidebar.button("✅ Sign Up"):
-            if new_username in users:
-                st.sidebar.error("🚨 Username already exists! Choose another.")
-            else:
-                users[new_username] = hash_password(new_password)
-                save_users(users)
-                st.sidebar.success("🎉 Account created successfully! Please log in.")
-                st.session_state.signup_mode = False
-                st.rerun()
-    else:
-        st.sidebar.subheader("🔐 Login")
-        username = st.sidebar.text_input("Username")
-        password = st.sidebar.text_input("Password", type="password")
-
-        if st.sidebar.button("🔓 Login"):
-            if username in users and users[username] == hash_password(password):
-                st.session_state.authenticated = True
-                st.session_state.username = username
-                st.sidebar.success("✅ Login Successful!")
-                st.rerun()
-            else:
-                st.sidebar.error("❌ Invalid username or password!")
-
-# 🔐 Sign Out Function
-def sign_out():
-    st.session_state.authenticated = False
-    st.session_state.username = None
-    st.sidebar.success("👋 You have been signed out.")
-    st.rerun()
-
-# 🔐 Check Authentication Before Proceeding
-if not st.session_state.authenticated:
-    login_page()
-    st.stop()
+# 🔐 Check Authentication
+check_auth()
 
 # ✅ User is Authenticated
 st.sidebar.success(f"👤 Logged in as: {st.session_state.username}")
 if st.sidebar.button("🚪 Sign Out"):
     sign_out()
 
-# 🎙️ Convert Voice to Text
-# def voice_to_text():
-#     recognizer = sr.Recognizer()
-#     with sr.Microphone() as source:
-#         st.sidebar.write("🎙️ Listening... Please speak your query.")
-#         try:
-#             audio = recognizer.listen(source, timeout=5)
-#             user_input = recognizer.recognize_google(audio)
-#             st.sidebar.write(f"🗨️ You said: **{user_input}**")
-#             return user_input
-#         except sr.UnknownValueError:
-#             st.sidebar.error("❌ Sorry, I couldn't understand the audio.")
-#             return ""
-#         except sr.RequestError:
-#             st.sidebar.error("❌ API error. Please check internet connection.")
-#             return ""
+# 🔍 AWS Bedrock Client Initialization
+def get_bedrock_client():
+    return boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+
+bedrock_client = get_bedrock_client()
 
 # 📥 Sidebar for Multiple File Uploads with Progress Bar
 st.sidebar.header("📂 Upload Your Datasets")
@@ -278,7 +104,7 @@ if uploaded_files:
 if dataframes:
     for i, df in enumerate(dataframes):
         st.write(f"### 📊 Preview of `{file_names[i]}`")
-        st.dataframe(df.head(10))
+        st.dataframe(df.head(50))
 
         # ✅ Detect Date Column
         date_col = None
@@ -301,7 +127,6 @@ if dataframes:
         df.dropna(subset=[date_col], inplace=True)
         df = df.sort_values(by=date_col)
 
-        
         # ✅ Filter columns that can be used for prediction (numeric or convertible to numeric)
         valid_columns = []
         for col in df.columns:
@@ -387,119 +212,5 @@ if dataframes:
             plt.legend()
             st.pyplot(fig)
             
-# 🧠 Chatbot Section
-st.subheader("🤖 Chat with Your Dataset")
-
-# 🗂️ Load Chat History for User
-user_chat_history_file = os.path.join(CHAT_HISTORY_DIR, f"{st.session_state.username}_chat_history.json")
-if os.path.exists(user_chat_history_file):
-    with open(user_chat_history_file, "r") as f:
-        chat_history = json.load(f)
-else:
-    chat_history = []
-
-# 🔄 Clear Chat History
-def clear_chat_history():
-    if os.path.exists(user_chat_history_file):
-        os.remove(user_chat_history_file)
-    st.success("✅ Chat history cleared!")
-    st.rerun()
-
-# 🎙️ Capture Voice or Text Input
-if "user_input" not in st.session_state:
-    st.session_state.user_input = ""
-
-# 🎙️ Button to Capture Voice Input
-# if st.button("🎙️ Speak"):
-#     voice_input = voice_to_text()
-#     if voice_input:
-#         st.session_state.user_input = voice_input
-
-# ✍️ Text Input Box for User Query
-user_input = st.text_input(
-    "Ask a question about your dataset:", value=st.session_state.user_input
-)
-
-# 🔥 Process User Query
-def query_bedrock_stream(user_input, df):
-    df_sample = df.head(20).to_json()
-
-    prompt = f"""
-    You are an AI analyzing a dataset:
-    {df_sample}
-
-    User's question: {user_input}
-
-    Provide a detailed and structured response.
-    """
-
-    payload = {
-        "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-        "max_tokens_to_sample": 150,
-        "temperature": 0.5,
-        "top_k": 250,
-        "top_p": 1,
-        "stop_sequences": ["\n\nHuman:"],
-        "anthropic_version": "bedrock-2023-05-31"
-    }
-
-    try:
-        response = bedrock_client.invoke_model_with_response_stream(
-            body=json.dumps(payload),
-            modelId="anthropic.claude-instant-v1",
-            accept="application/json",
-            contentType="application/json"
-        )
-
-        stream = response["body"]
-        full_response = ""
-        for event in stream:
-            chunk = event.get("chunk")
-            if chunk:
-                chunk_data = json.loads(chunk.get("bytes").decode())
-                chunk_text = chunk_data.get("completion", "")
-                full_response += chunk_text
-
-        return full_response
-    except Exception as e:
-        return f"❌ Error: {str(e)}"
-
-# 📤 Process User Input and Get Response
-if user_input:
-    if dataframes:
-        selected_df_index = st.selectbox("Select Dataset to Query", file_names)
-        selected_df = dataframes[file_names.index(selected_df_index)]
-        response_text = query_bedrock_stream(user_input, selected_df)
-        st.markdown(
-            f"### 💬 Latest Chat\n"
-            f"🗨️ **{user_input}**\n"
-            f"🤖 {response_text}"
-        )
-        # Save to Chat History
-        chat_history.insert(0, {"question": user_input, "answer": response_text})
-        if len(chat_history) > 10:
-            chat_history.pop()
-        with open(user_chat_history_file, "w") as f:
-            json.dump(chat_history, f)
-
-# 📜 Show/Hide Full Chat History with Clear Option
-st.subheader("📜 Chat History")
-
-# Use a checkbox for toggle functionality to ensure single-click behavior
-show_chat_history = st.checkbox("📜 Show Chat History", value=False)
-
-# Show full chat history only if checkbox is checked
-if show_chat_history:
-    if len(chat_history) > 0:
-        st.write("### 🗨️ Previous Conversations")
-        for chat in chat_history[:10]:  # Show the last 10 chats
-            st.write(f"**🗨️ {chat['question']}**")
-            st.write(f"🤖 {chat['answer']}")
-            st.write("---")
-        
-        # 🧹 Clear Chat History Button (Visible when chat is shown)
-        if st.button("🧹 Clear Chat History"):
-            clear_chat_history()
-    else:
-        st.write("🤖 No chat history available.")
-
+st.write("")
+chatbot_section(dataframes, file_names, bedrock_client)
