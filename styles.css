@@ -1,7 +1,6 @@
 
         body, .stApp {
-            background-color: #DCDCDC
-            !important;  /* White Background */
+            background-color: #FFFFFF !important;  /* White Background */
             font-family: 'Arial', sans-serif;
             color: #000000 !important;  /* Black Text */
         }
@@ -13,6 +12,8 @@
                 color: #FFFFFF !important;  /* White Text */
             }
         }
+
+        
 
         /* ====== Header and Subheader Styling ====== */
         h1, h2, h3, h4, h5, h6 {
@@ -32,7 +33,7 @@
 
         @media (prefers-color-scheme: dark) {
             .css-1d391kg {
-                background-color: #000000 !important;  /* Black Sidebar in Dark Mode */
+                background-color: #f5f3f3 !important;  /* Black Sidebar in Dark Mode */
             }
         }
 
@@ -101,7 +102,7 @@
 
         /* Button Styles */
         .stButton > button {
-            background-color: #556B2F;  /* Olive Green */
+            background-color: #17a7e0;  /* Olive Green */
             color: #FFFFFF;
             border-radius: 8px;
             padding: 10px 20px;
@@ -117,7 +118,7 @@
         }
 
         .stButton > button:hover {
-            background-color: #357ABD !important;
+            background-color: #17a7e0 !important;
             box-shadow: 0 0 12px rgba(74, 144, 226, 0.8);
         }
 
@@ -125,7 +126,7 @@
         .stDataFrame {
             width: 100% !important;
             height: 400px !important;
-            border: 1px solid #008000;  /* Green Border */
+            border: 1px solid #17a7e0;  /* Green Border */
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
             overflow: hidden;
@@ -146,7 +147,7 @@
 
         @media (prefers-color-scheme: dark) {
             h2 + div p {
-                color: #CCCCCC !important; /* Light Gray for Dark Mode */
+                color: #FFFFFF !important; /* Light Gray for Dark Mode */
             }
         }
 
@@ -154,5 +155,16 @@
         /* Hide Footer */
         footer {
             visibility: hidden;
+        }
+        
+        .logo-container {
+            text-align: center;
+            margin-top: -30px; /* Optional: Adjust spacing */
+            margin-bottom: 10px;
+        }
+        
+        .logo-container img {
+            width: 100px; /* Adjust logo size */
+            border-radius: 12px; /* Optional: Add rounded corners */
         }
         
