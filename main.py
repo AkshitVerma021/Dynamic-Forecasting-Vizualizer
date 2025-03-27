@@ -14,9 +14,32 @@ from sklearn.preprocessing import LabelEncoder
 from auth import init_session_state, check_auth, sign_out
 from chatbot import chatbot_section  # ✅ Import Chatbot Section
 
-# 📌 Set Streamlit Page Config
-st.set_page_config(layout="wide")
+# 📌 Set Streamlit Page Config (MUST BE FIRST!)
+st.set_page_config(page_title="AI-Powered Data Analysis", layout="centered")
 
+# 📸 Add Company Logo at the Top
+st.markdown(
+    """
+    <style>
+    .center-logo {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# 📸 Add Logo as Image (Centered Properly)
+# 📸 Add Company Logo at the Top (Centered)
+col1, col2, col3 = st.columns([1, 1, 1])  # Use 1:2:1 ratio for perfect centering
+with col2:
+    st.image("logo.png", width=350)
+
+
+# 📚 Load CSS for Custom Styling
 def load_css(styles):
     with open(styles, "r") as f:
         css_styles = f.read()
@@ -26,7 +49,7 @@ load_css("styles.css")
 
 
 # 🔥 App Title
-st.title("📊 AI-Powered Data Analysis & Forecasting with Voice Chat")
+st.title("📊 AI-Powered Data Analysis ")
 
 # 🗄 Define Storage Directories
 STORAGE_DIR = "saved_forecasts"
@@ -48,11 +71,14 @@ st.sidebar.success(f"👤 Logged in as: {st.session_state.username}")
 if st.sidebar.button("🚪 Sign Out"):
     sign_out()
 
-# 🔍 AWS Bedrock Client Initialization
+# 📍 AWS Bedrock Client Initialization
 def get_bedrock_client():
     return boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
 
 bedrock_client = get_bedrock_client()
+
+# 📸 Add Company Logo to Sidebar
+st.sidebar.image("logo.png", width=150, caption="")
 
 # 📥 Sidebar for Multiple File Uploads with Progress Bar
 st.sidebar.header("📂 Upload Your Datasets")
@@ -211,6 +237,6 @@ if dataframes:
             plt.xticks(rotation=45)
             plt.legend()
             st.pyplot(fig)
-            
+
 st.write("")
 chatbot_section(dataframes, file_names, bedrock_client)
