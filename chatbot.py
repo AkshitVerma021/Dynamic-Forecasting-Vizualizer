@@ -14,6 +14,7 @@ def clear_chat_history(username):
     st.rerun()
 
 # 📤 Process User Input and Get Response
+# 📤 Process User Input and Get Response
 def query_bedrock_stream(user_input, df, bedrock_client):
     df_sample = df.head(50).to_json()
 
@@ -26,36 +27,42 @@ def query_bedrock_stream(user_input, df, bedrock_client):
     Provide a detailed and structured response.
     """
 
+    # 📸 Updated Payload for Claude 3 Haiku
     payload = {
-        "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-        "max_tokens_to_sample": 300,
-        "temperature": 0.5,
-        "top_k": 250,
-        "top_p": 1,
-        "stop_sequences": ["\n\nHuman:"],
-        "anthropic_version": "bedrock-2023-05-31"
+        "modelId": "anthropic.claude-3-haiku-20240307-v1:0",
+        "contentType": "application/json",
+        "accept": "application/json",
+        "body": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+        }
     }
 
     try:
-        response = bedrock_client.invoke_model_with_response_stream(
-            body=json.dumps(payload),
-            modelId="anthropic.claude-instant-v1",
-            accept="application/json",
-            contentType="application/json"
+        # ✅ Use Claude 3 Haiku API
+        response = bedrock_client.invoke_model(
+            body=json.dumps(payload["body"]),
+            modelId=payload["modelId"],
+            accept=payload["accept"],
+            contentType=payload["contentType"]
         )
 
-        stream = response["body"]
-        full_response = ""
-        for event in stream:
-            chunk = event.get("chunk")
-            if chunk:
-                chunk_data = json.loads(chunk.get("bytes").decode())
-                chunk_text = chunk_data.get("completion", "")
-                full_response += chunk_text
+        result = json.loads(response["body"].read())
+        full_response = result["content"][0]["text"]
 
         return full_response
+
     except Exception as e:
         return f"❌ Error: {str(e)}"
+
 
 # 🧠 Chatbot Section
 def chatbot_section(dataframes, file_names, bedrock_client):
