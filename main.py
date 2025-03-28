@@ -73,12 +73,12 @@ if st.sidebar.button("🚪 Sign Out"):
 
 # 📍 AWS Bedrock Client Initialization
 def get_bedrock_client():
-    return boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+    return boto3.client(service_name="bedrock-runtime", region_name="ap-south-1")
 
 bedrock_client = get_bedrock_client()
 
 # 📸 Add Company Logo to Sidebar
-st.sidebar.image("logo.png", width=150, caption="")
+# st.sidebar.image("logo.png", width=150, caption="")
 
 # 📥 Sidebar for Multiple File Uploads with Progress Bar
 st.sidebar.header("📂 Upload Your Datasets")
