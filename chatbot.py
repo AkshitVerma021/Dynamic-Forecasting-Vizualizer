@@ -14,40 +14,42 @@ def clear_chat_history(username):
     st.rerun()
 
 # 📤 Process User Input and Get Response
-# 📤 Process User Input and Get Response
 def query_bedrock_stream(user_input, df, bedrock_client):
-    df_sample = df.head(50).to_json()
+    # 🛑 Reduce dataset size to avoid token overflow
+    df_sample = df.head(5).to_json()  # Reduce to 5 rows
+    df_summary = df.describe().to_json()  # Summary stats
 
     prompt = f"""
-    You are an AI analyzing a dataset:
-    {df_sample}
+    You are an AI analyzing a dataset.
+
+    Dataset Overview:
+    Columns: {list(df.columns)}
+    Sample Data: {df_sample}
+    Summary: {df_summary}
 
     User's question: {user_input}
 
-    Provide a detailed and structured response.
+    Provide a structured response.
     """
 
-    # 📸 Updated Payload for Claude 3 Haiku
+    # 📸 Updated Payload for Amazon Titan Text G1 - Lite
     payload = {
-        "modelId": "anthropic.claude-3-haiku-20240307-v1:0",
+        "modelId": "amazon.titan-text-lite-v1",
         "contentType": "application/json",
         "accept": "application/json",
         "body": {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1000,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt}
-                    ]
-                }
-            ]
+            "inputText": prompt[:4000],  # Ensure it stays within the token limit
+            "textGenerationConfig": {
+                "maxTokenCount": 1024,  # Reduce max token count
+                "stopSequences": [],
+                "temperature": 0.7,  # Adjust temperature for better responses
+                "topP": 0.9
+            }
         }
     }
 
     try:
-        # ✅ Use Claude 3 Haiku API
+        # ✅ Use Amazon Titan Text G1 - Lite API
         response = bedrock_client.invoke_model(
             body=json.dumps(payload["body"]),
             modelId=payload["modelId"],
@@ -56,13 +58,12 @@ def query_bedrock_stream(user_input, df, bedrock_client):
         )
 
         result = json.loads(response["body"].read())
-        full_response = result["content"][0]["text"]
+        full_response = result["results"][0]["outputText"]
 
         return full_response
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
-
 
 # 🧠 Chatbot Section
 def chatbot_section(dataframes, file_names, bedrock_client):
