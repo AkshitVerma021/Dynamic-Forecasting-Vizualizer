@@ -27,7 +27,7 @@ body, .stApp {
 /* Dark Mode - Invert Logo Color */
 @media (prefers-color-scheme: dark) {
     .logo-container img {
-        filter: invert(1) hue-rotate(180deg); /* Invert colors for dark mode */
+         /* Invert colors for dark mode */
         border: 1px solid #FFFFFF; /* Optional: Add a border for visibility */
     }
 }
@@ -71,7 +71,7 @@ h1, h2, h3, h4, h5, h6 {
 .stTextInput > div > div > input, textarea {
     background-color: #FFFFFF !important; /* White for Light Mode */
     color: #000000 !important; /* Black Text */
-    border: 1px solid #BDC3C7 !important;
+    border: 1px solid #000000 !important;
     border-radius: 8px;
     padding: 8px 12px;
 }
@@ -80,7 +80,7 @@ h1, h2, h3, h4, h5, h6 {
     .stTextInput > div > div > input, textarea {
         background-color: #BDC3C7 !important;  /* Black for Dark Mode */
         color: #FFFFFF !important;  /* White Text */
-        border: 1px solid #444444 !important;
+        border: 1px solid #000000 !important;
     }
 }
 
@@ -151,6 +151,12 @@ h1, h2, h3, h4, h5, h6 {
     overflow: hidden;
 }
 
+/* ========= Fix Dropdown (selectbox/multiselect) ========= */
+.stSelectbox, .stMultiSelect, .stSelectbox div, .stMultiSelect div {
+    background-color: #FFFFFF !important;  /* White background */
+    color: #000000 !important;             /* Black text */
+}
+
 @media (prefers-color-scheme: dark) {
     .stDataFrame {
         border: 1px solid #444444 !important;
@@ -186,3 +192,4 @@ footer {
     width: 100px; /* Adjust logo size */
     border-radius: 12px; /* Optional: Add rounded corners */
 }
+
