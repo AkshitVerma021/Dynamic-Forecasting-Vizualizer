@@ -1,55 +1,81 @@
 import os
 import json
+import pandas as pd
 import streamlit as st
 
 # 📂 Directory for Chat History
 CHAT_HISTORY_DIR = "chat_history"
+os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
+
+def get_user_chat_file(username):
+    """Get the chat history file path for a user"""
+    return os.path.join(CHAT_HISTORY_DIR, f"{username}_chat_history.json")
+
+def load_chat_history(username):
+    """Load chat history from file"""
+    user_file = get_user_chat_file(username)
+    if os.path.exists(user_file):
+        with open(user_file, "r") as f:
+            return json.load(f)
+    return []
+
+def save_chat_history(username, messages):
+    """Save chat history to file"""
+    user_file = get_user_chat_file(username)
+    with open(user_file, "w") as f:
+        json.dump(messages, f)
 
 # 🔄 Clear Chat History
 def clear_chat_history(username):
-    user_chat_history_file = os.path.join(CHAT_HISTORY_DIR, f"{username}_chat_history.json")
-    if os.path.exists(user_chat_history_file):
-        os.remove(user_chat_history_file)
+    user_file = get_user_chat_file(username)
+    if os.path.exists(user_file):
+        os.remove(user_file)
+    st.session_state.messages = []
     st.success("✅ Chat history cleared!")
     st.rerun()
 
 # 📤 Process User Input and Get Response
 def query_bedrock_stream(user_input, df, bedrock_client):
-    # 🛑 Reduce dataset size to avoid token overflow
-    df_sample = df.head(5).to_json()  # Reduce to 5 rows
-    df_summary = df.describe().to_json()  # Summary stats
-
+    # Get sample data as text
+    df_sample = df.head(5).to_string()
+    df_summary = df.describe().to_string()
+    
     prompt = f"""
-    You are an AI analyzing a dataset.
+    You are a helpful AI data analyst. The user has asked about a dataset.
 
-    Dataset Overview:
-    Columns: {list(df.columns)}
-    Sample Data: {df_sample}
-    Summary: {df_summary}
-
-    User's question: {user_input}
-
-    Provide a structured response.
+    Dataset Information:
+    - Columns: {', '.join(df.columns)}
+    
+    Sample Data (first 5 rows):
+    {df_sample}
+    
+    Statistical Summary:
+    {df_summary}
+    
+    User's Question: {user_input}
+    
+    Please provide a clear, well-formatted response in plain text with:
+    - A direct answer to the question
+    - Relevant insights from the data
+    - Simple formatting using bullet points or numbered lists when helpful
     """
 
-    # 📸 Updated Payload for Amazon Titan Text G1 - Lite
     payload = {
         "modelId": "amazon.titan-text-lite-v1",
         "contentType": "application/json",
         "accept": "application/json",
         "body": {
-            "inputText": prompt[:4000],  # Ensure it stays within the token limit
+            "inputText": prompt[:4000],
             "textGenerationConfig": {
-                "maxTokenCount": 1024,  # Reduce max token count
+                "maxTokenCount": 1024,
                 "stopSequences": [],
-                "temperature": 0.7,  # Adjust temperature for better responses
+                "temperature": 0.7,
                 "topP": 0.9
             }
         }
     }
 
     try:
-        # ✅ Use Amazon Titan Text G1 - Lite API
         response = bedrock_client.invoke_model(
             body=json.dumps(payload["body"]),
             modelId=payload["modelId"],
@@ -59,8 +85,7 @@ def query_bedrock_stream(user_input, df, bedrock_client):
 
         result = json.loads(response["body"].read())
         full_response = result["results"][0]["outputText"]
-
-        return full_response
+        return full_response.strip()
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
@@ -69,59 +94,74 @@ def query_bedrock_stream(user_input, df, bedrock_client):
 def chatbot_section(dataframes, file_names, bedrock_client):
     st.subheader("🤖 Chat with Your Dataset")
 
-    # 🗂️ Load Chat History for User
-    if "username" in st.session_state and st.session_state.username:
-        username = st.session_state.username
-        if not os.path.exists(CHAT_HISTORY_DIR):
-            os.makedirs(CHAT_HISTORY_DIR)
-        user_chat_history_file = os.path.join(CHAT_HISTORY_DIR, f"{username}_chat_history.json")
-    else:
-        st.warning("⚠️ You must be logged in to use the chatbot.")
+    # Check authentication
+    if "username" not in st.session_state or not st.session_state.username:
+        st.warning("⚠️ Please log in to use the chatbot.")
         return
 
-    if os.path.exists(user_chat_history_file):
-        with open(user_chat_history_file, "r") as f:
-            chat_history = json.load(f)
-    else:
-        chat_history = []
+    username = st.session_state.username
 
-    # 🎙️ Capture Voice or Text Input
-    if "user_input" not in st.session_state:
-        st.session_state.user_input = ""
+    # Initialize chat messages
+    if "messages" not in st.session_state:
+        # Load from history or initialize new
+        st.session_state.messages = []
+        history = load_chat_history(username)
+        
+        # Convert history to message format
+        for item in history:
+            st.session_state.messages.append({"role": "user", "content": item["question"]})
+            st.session_state.messages.append({"role": "assistant", "content": item["answer"]})
+        
+        # Add welcome message if empty
+        if not st.session_state.messages:
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": "Hello! I'm your data assistant. Ask me anything about your datasets."
+            })
 
-    # ✍️ Text Input Box for User Query
-    user_input = st.text_input(
-        "Ask a question about your dataset:", value=st.session_state.user_input
-    )
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # 📤 Process User Input and Get Response
-    if user_input:
-        if dataframes:
-            selected_df_index = st.selectbox("Select Dataset to Query", file_names)
-            selected_df = dataframes[file_names.index(selected_df_index)]
-            response_text = query_bedrock_stream(user_input, selected_df, bedrock_client)
+    # Chat input form
+    with st.form("chat_form"):
+        user_input = st.text_input("Ask a question about your dataset:", key="chat_input")
+        submitted = st.form_submit_button("Submit")
 
-            st.markdown(
-                f"### 💬 Latest Chat\n"
-                f"🗨️ **{user_input}**\n"
-                f"🤖 {response_text}"
-            )
+    # Process when submitted
+    if submitted and user_input.strip():
+        if not dataframes:
+            st.error("Please upload at least one dataset first.")
+            return
             
-            # Save to Chat History
-            chat_history.insert(0, {"question": user_input, "answer": response_text})
-            if len(chat_history) > 10:
-                chat_history.pop()
-            with open(user_chat_history_file, "w") as f:
-                json.dump(chat_history, f)
+        # Add user message to chat
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # Get selected dataset
+        selected_df_index = st.selectbox("Select Dataset to Query", file_names, key="dataset_select")
+        selected_df = dataframes[file_names.index(selected_df_index)]
+        
+        # Get and display response
+        with st.spinner("Analyzing your data..."):
+            response_text = query_bedrock_stream(user_input, selected_df, bedrock_client)
+        
+        # Add assistant response
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        
+        # Save to history (convert messages to history format)
+        history = []
+        for i in range(0, len(st.session_state.messages), 2):
+            if i+1 < len(st.session_state.messages):
+                history.append({
+                    "question": st.session_state.messages[i]["content"],
+                    "answer": st.session_state.messages[i+1]["content"],
+                    "timestamp": str(pd.Timestamp.now())
+                })
+        
+        save_chat_history(username, history[-10:])  # Keep last 10 conversations
+        st.rerun()
 
-    # 📜 Show/Hide Full Chat History
-    if len(chat_history) > 1:  # Only show if more than 1 chat exists
-        with st.expander("📜 Chat History", expanded=False):
-            for chat in chat_history[1:]:  # Skip the latest chat
-                st.write(f"**🗨️ {chat['question']}**")
-                st.write(f"🤖 {chat['answer']}")
-                st.write("---")
-
-    # 🧹 Clear Chat History Button
-    if st.button("🧹 Clear Chat History"):
+    # Clear chat button
+    if st.button("🧹 Clear Conversation", key="clear_chat_button"):
         clear_chat_history(username)
