@@ -92,7 +92,7 @@ st.sidebar.markdown(
 
 uploaded_files = st.sidebar.file_uploader(
     "Upload Files (CSV, Excel, JSON, Parquet, PDF)",
-    type=["csv", "xls", "xlsx", "json", "parquet", "pdf"],  # ✅ Added PDF Support
+    type=["csv", "xls", "xlsx", "json", "parquet", "pdf"],  
     accept_multiple_files=True
 )
 
@@ -218,13 +218,25 @@ if dataframes:
                 # Check if the column is sorted and has regular intervals
                 if selected_df[col].is_monotonic_increasing:
                     date_col = col
-                    # Create a datetime index based on the numeric column
-                    selected_df[col] = pd.date_range(
-                        start='2000-01-01',  # arbitrary start date
-                        periods=len(selected_df),
-                        freq='Y'  # yearly frequency
-                    )
-                    break
+                    try:
+                        # Create a datetime index with daily frequency instead of yearly
+                        # This prevents the date from growing too large
+                        selected_df[col] = pd.date_range(
+                            start='2000-01-01',  # arbitrary start date
+                            periods=len(selected_df),
+                            freq='D'  # daily frequency instead of yearly
+                        )
+                        break
+                    except pd.errors.OutOfBoundsDatetime:
+                        # If even daily frequency is too large, use a smaller dataset
+                        st.warning(f"Dataset too large to create date range. Using first 1000 rows.")
+                        selected_df = selected_df.head(1000)
+                        selected_df[col] = pd.date_range(
+                            start='2000-01-01',
+                            periods=len(selected_df),
+                            freq='D'
+                        )
+                        break
         
         # Now proceed with forecasting if we found a suitable column
         if date_col is None:
