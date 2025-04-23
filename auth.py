@@ -2,10 +2,19 @@ import os
 import streamlit as st
 import json
 import hashlib
+import logging
+from s3_storage import load_user_data, save_user_data
 
-# Create a persistent data directory
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create a local backup directory for fallback
 DATA_DIR = os.path.join(os.path.expanduser("~"), "persistent_data")
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Log the actual path for debugging
+logger.info(f"Local backup directory: {DATA_DIR}")
 
 # 📂 User Data File Location
 USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
@@ -18,27 +27,51 @@ if not os.path.exists(USER_DATA_FILE):
 # Log the actual path for debugging
 print(f"User data stored at: {USER_DATA_FILE}")
 
-# 🔐 Load Users from JSON File
+# 🔐 Load Users from S3
 def load_users():
     try:
-        with open(USER_DATA_FILE, "r") as f:
-            return json.load(f)
+        # Try to load from S3
+        users = load_user_data()
+        logger.info("User data loaded from S3 successfully")
+        return users
     except Exception as e:
-        print(f"Error loading users: {str(e)}")
-        # If there's an error, create a new file
-        with open(USER_DATA_FILE, "w") as f:
-            json.dump({}, f)
-        return {}
+        logger.error(f"Error loading users from S3: {str(e)}")
+        logger.info("Falling back to local storage")
+        
+        # Fallback to local storage
+        USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
+        if not os.path.exists(USER_DATA_FILE):
+            with open(USER_DATA_FILE, "w") as f:
+                json.dump({}, f)
+        
+        try:
+            with open(USER_DATA_FILE, "r") as f:
+                return json.load(f)
+        except Exception as local_e:
+            logger.error(f"Error loading from local backup: {str(local_e)}")
+            return {}
 
-# 💾 Save Users to JSON File
+# 💾 Save Users to S3
 def save_users(users):
     try:
-        with open(USER_DATA_FILE, "w") as f:
-            json.dump(users, f)
-        # Print confirmation for debugging
-        print(f"User data saved successfully to {USER_DATA_FILE}")
+        # Try to save to S3
+        success = save_user_data(users)
+        if success:
+            logger.info("User data saved to S3 successfully")
+        else:
+            raise Exception("S3 save operation failed")
     except Exception as e:
-        print(f"Error saving users: {str(e)}")
+        logger.error(f"Error saving users to S3: {str(e)}")
+        logger.info("Falling back to local storage")
+        
+        # Fallback to local storage
+        USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
+        try:
+            with open(USER_DATA_FILE, "w") as f:
+                json.dump(users, f)
+            logger.info("User data saved to local backup successfully")
+        except Exception as local_e:
+            logger.error(f"Error saving to local backup: {str(local_e)}")
 
 # 🔐 Hash Password for Security
 def hash_password(password):
@@ -152,6 +185,7 @@ def increment_usage():
             if isinstance(users[st.session_state.username], dict):
                 users[st.session_state.username]["usage_count"] = st.session_state.usage_count
                 save_users(users)
+                logger.info(f"Usage count incremented for {st.session_state.username}: {st.session_state.usage_count}")
 
 # 🛑 Check Usage Limits
 def check_usage_limit():

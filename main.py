@@ -9,6 +9,7 @@ import chardet
 import hashlib
 import pdfplumber
 import time
+import logging
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
@@ -16,6 +17,11 @@ from auth import init_session_state, check_auth, sign_out, increment_usage, chec
 from chatbot import chatbot_section  # ✅ Import Chatbot Section
 from prophet import Prophet
 from plotly import graph_objs as go
+from s3_storage import save_forecast, S3_BUCKET_NAME
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 📌 Set Streamlit Page Config (MUST BE FIRST!)
 st.set_page_config(page_title="AI-Powered Data Analysis and Forecasting", layout="centered")
@@ -78,6 +84,9 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+# Log S3 bucket info
+logger.info(f"Using S3 bucket: {S3_BUCKET_NAME}")
 
 # 🗄 Define Storage Directories
 STORAGE_DIR = os.path.join(DATA_DIR, "saved_forecasts")
@@ -505,6 +514,31 @@ if dataframes:
                         components_fig = model.plot_components(forecast)
                         st.write("### 📊 Forecast Components")
                         st.pyplot(components_fig)
+                        
+                        # Option to save forecast to S3
+                        if st.button("💾 Save Forecast to S3"):
+                            try:
+                                # Convert forecast to JSON serializable format
+                                forecast_data = {
+                                    "forecast_dates": [str(date) for date in forecast['ds'].tolist()],
+                                    "forecast_values": forecast['yhat'].tolist(),
+                                    "lower_bound": forecast['yhat_lower'].tolist(),
+                                    "upper_bound": forecast['yhat_upper'].tolist(),
+                                    "target_column": target_col,
+                                    "source_file": selected_file,
+                                    "created_at": str(pd.Timestamp.now())
+                                }
+                                
+                                # Save to S3
+                                forecast_name = f"{selected_file.split('.')[0]}_{target_col}_forecast"
+                                success = save_forecast(st.session_state.username, forecast_name, forecast_data)
+                                
+                                if success:
+                                    st.success(f"✅ Forecast saved to S3 bucket: {S3_BUCKET_NAME}")
+                                else:
+                                    st.error("❌ Failed to save forecast to S3")
+                            except Exception as e:
+                                st.error(f"❌ Error saving forecast: {str(e)}")
                     
                     except Exception as e:
                         st.write("Prophet model failed, switching to Random Forest.")
