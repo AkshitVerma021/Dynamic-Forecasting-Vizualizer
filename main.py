@@ -12,7 +12,7 @@ import time
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
-from auth import init_session_state, check_auth, sign_out, increment_usage, check_usage_limit
+from auth import init_session_state, check_auth, sign_out, increment_usage, check_usage_limit, DATA_DIR
 from chatbot import chatbot_section  # ✅ Import Chatbot Section
 from prophet import Prophet
 from plotly import graph_objs as go
@@ -52,13 +52,20 @@ load_css("styles.css")
 st.title("📊 AI-Powered Data Analysis ")
 
 # 🗄 Define Storage Directories
-STORAGE_DIR = "saved_forecasts"
-MODEL_DIR = "saved_models"
-USER_DATA_FILE = "users.json"
-CHAT_HISTORY_DIR = "chat_history"
+STORAGE_DIR = os.path.join(DATA_DIR, "saved_forecasts")
+MODEL_DIR = os.path.join(DATA_DIR, "saved_models")
+USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
+CHAT_HISTORY_DIR = os.path.join(DATA_DIR, "chat_history")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
+
+# Print debug information for storage locations
+print(f"Storage directories initialized at:")
+print(f"- User data: {USER_DATA_FILE}")
+print(f"- Forecasts: {STORAGE_DIR}")
+print(f"- Models: {MODEL_DIR}")
+print(f"- Chat history: {CHAT_HISTORY_DIR}")
 
 # 🔑 Initialize Session State
 init_session_state()

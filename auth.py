@@ -3,23 +3,42 @@ import streamlit as st
 import json
 import hashlib
 
+# Create a persistent data directory
+DATA_DIR = os.path.join(os.path.expanduser("~"), "persistent_data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # 📂 User Data File Location
-USER_DATA_FILE = "users.json"
+USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
 
 # 📝 Create users.json if it does not exist
 if not os.path.exists(USER_DATA_FILE):
     with open(USER_DATA_FILE, "w") as f:
         json.dump({}, f)
 
+# Log the actual path for debugging
+print(f"User data stored at: {USER_DATA_FILE}")
+
 # 🔐 Load Users from JSON File
 def load_users():
-    with open(USER_DATA_FILE, "r") as f:
-        return json.load(f)
+    try:
+        with open(USER_DATA_FILE, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading users: {str(e)}")
+        # If there's an error, create a new file
+        with open(USER_DATA_FILE, "w") as f:
+            json.dump({}, f)
+        return {}
 
 # 💾 Save Users to JSON File
 def save_users(users):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump(users, f)
+    try:
+        with open(USER_DATA_FILE, "w") as f:
+            json.dump(users, f)
+        # Print confirmation for debugging
+        print(f"User data saved successfully to {USER_DATA_FILE}")
+    except Exception as e:
+        print(f"Error saving users: {str(e)}")
 
 # 🔐 Hash Password for Security
 def hash_password(password):

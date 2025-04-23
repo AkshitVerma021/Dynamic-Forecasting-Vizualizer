@@ -2,11 +2,14 @@ import os
 import json
 import pandas as pd
 import streamlit as st
-from auth import increment_usage
+from auth import increment_usage, DATA_DIR
 
 # 📂 Directory for Chat History
-CHAT_HISTORY_DIR = "chat_history"
+CHAT_HISTORY_DIR = os.path.join(DATA_DIR, "chat_history")
 os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
+
+# Print the chat history location for debugging
+print(f"Chat history stored at: {CHAT_HISTORY_DIR}")
 
 def get_user_chat_file(username):
     """Get the chat history file path for a user"""
