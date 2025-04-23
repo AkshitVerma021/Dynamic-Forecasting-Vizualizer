@@ -117,7 +117,7 @@ st.sidebar.success(f"👤 Logged in as: {st.session_state.username}")
 if st.session_state.paid_user:
     st.sidebar.success("💎 Premium Subscription Active")
 else:
-    FREE_USAGE_LIMIT = 10
+    FREE_USAGE_LIMIT = 6
     remaining_uses = max(0, FREE_USAGE_LIMIT - st.session_state.usage_count)
     if remaining_uses > 0:
         st.sidebar.info(f"🔄 {remaining_uses} free uses remaining")
@@ -152,7 +152,7 @@ st.sidebar.markdown(
 
 # Check if user has reached their usage limit and show payment section if needed
 if not check_usage_limit():
-    st.warning("⚠️ You've reached your free usage limit (10 uses).")
+    st.warning("⚠️ You've reached your free usage limit (6 uses).")
     
     st.markdown("## 💳 Upgrade to Premium")
     st.markdown("""
