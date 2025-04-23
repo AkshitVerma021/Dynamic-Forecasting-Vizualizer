@@ -190,7 +190,7 @@ def increment_usage():
 # 🛑 Check Usage Limits
 def check_usage_limit():
     # Free usage limit
-    FREE_USAGE_LIMIT = 10
+    FREE_USAGE_LIMIT = 6
     
     if st.session_state.authenticated:
         if st.session_state.paid_user:
