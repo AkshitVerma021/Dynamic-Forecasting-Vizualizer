@@ -18,7 +18,7 @@ from prophet import Prophet
 from plotly import graph_objs as go
 
 # 📌 Set Streamlit Page Config (MUST BE FIRST!)
-st.set_page_config(page_title="AI-Powered Data Analysis", layout="centered")
+st.set_page_config(page_title="AI-Powered Data Analysis and Forecasting", layout="centered")
 
 # 📸 Add Company Logo at the Top
 st.markdown(
@@ -38,7 +38,7 @@ st.markdown(
 # 📸 Add Logo as Image (Centered Properly)
 col1, col2, col3 = st.columns([1, 1, 1])  # Use 1:2:1 ratio for perfect centering
 with col2:
-    st.image("logo.png", width=350)
+    st.image("logo.png", width=300)
 
 # 📚 Load CSS for Custom Styling
 def load_css(styles):
@@ -46,10 +46,38 @@ def load_css(styles):
         css_styles = f.read()
         st.markdown(f"<style>{css_styles}</style>", unsafe_allow_html=True)
 
+# Add custom CSS for centered title
+st.markdown(
+    """
+    <style>
+    .title-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .title-text {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #17a7e0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 load_css("styles.css")
 
-# 🔥 App Title
-st.title("📊 AI-Powered Data Analysis ")
+# 🔥 App Title with centered styling
+st.markdown(
+    """
+    <div class="title-container">
+        <div class="title-text">📊 AI-Powered Data Analysis and Forecasting</div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # 🗄 Define Storage Directories
 STORAGE_DIR = os.path.join(DATA_DIR, "saved_forecasts")
@@ -143,7 +171,7 @@ if not check_usage_limit():
         st.markdown("### Subscription Options")
         plan = st.radio(
             "Choose a plan:",
-            ["Monthly (₹599/month)", "Annual (₹6999/year) "]
+            ["Monthly (₹599/month)", "Annual (₹6599/year) "]
         )
         
         # Initialize confirmation state if not exists
