@@ -2,6 +2,7 @@ import os
 import json
 import pandas as pd
 import streamlit as st
+from auth import increment_usage
 
 # 📂 Directory for Chat History
 CHAT_HISTORY_DIR = "chat_history"
@@ -129,11 +130,20 @@ def chatbot_section(dataframes, file_names, bedrock_client):
         user_input = st.text_input("Ask a question about your dataset:", key="chat_input")
         submitted = st.form_submit_button("Submit")
 
+    # Initialize usage tracking for chat
+    if "chat_submission_counted" not in st.session_state:
+        st.session_state.chat_submission_counted = False
+
     # Process when submitted
     if submitted and user_input.strip():
         if not dataframes:
             st.error("Please upload at least one dataset first.")
             return
+        
+        # Count usage for this chat interaction if not already counted
+        if not st.session_state.chat_submission_counted:
+            increment_usage()
+            st.session_state.chat_submission_counted = True
             
         # Add user message to chat
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -164,4 +174,6 @@ def chatbot_section(dataframes, file_names, bedrock_client):
 
     # Clear chat button
     if st.button("🧹 Clear Conversation", key="clear_chat_button"):
+        # Reset the usage tracking when chat is cleared
+        st.session_state.chat_submission_counted = False
         clear_chat_history(username)
