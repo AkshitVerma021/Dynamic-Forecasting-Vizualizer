@@ -143,7 +143,7 @@ if not check_usage_limit():
         st.markdown("### Subscription Options")
         plan = st.radio(
             "Choose a plan:",
-            ["Monthly (₹599/month)", "Annual (₹4599/year) "]
+            ["Monthly (₹599/month)", "Annual (₹6999/year) "]
         )
         
         # Initialize confirmation state if not exists
