@@ -68,6 +68,25 @@ st.markdown(
         font-weight: bold;
         color: #17a7e0;
     }
+    /* Hide the default file size limit text - multiple selectors for different elements */
+    .uploadedFile:first-child ~ small,
+    .stFileUploader > section > div > small,
+    .stFileUploader [data-testid="stFileUploadDropzone"] > div + div,
+    div[data-testid="stFileUploadDropzone"] > div:nth-child(2),
+    .stFileUploader p:nth-child(2),
+    .stFileUploader small, 
+    [data-testid="stFileUploadDropzone"] p + p,
+    [data-testid="stFileUploadDropzone"] > div > p:not(:first-child),
+    [data-testid="stFileUploadDropzone"] small,
+    .stFileUploader .css-ysnqb2,
+    .stFileUploader div + p {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        opacity: 0 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -516,29 +535,30 @@ if dataframes:
                         st.pyplot(components_fig)
                         
                         # Option to save forecast to S3
-                        if st.button("💾 Save Forecast to S3"):
-                            try:
-                                # Convert forecast to JSON serializable format
-                                forecast_data = {
-                                    "forecast_dates": [str(date) for date in forecast['ds'].tolist()],
-                                    "forecast_values": forecast['yhat'].tolist(),
-                                    "lower_bound": forecast['yhat_lower'].tolist(),
-                                    "upper_bound": forecast['yhat_upper'].tolist(),
-                                    "target_column": target_col,
-                                    "source_file": selected_file,
-                                    "created_at": str(pd.Timestamp.now())
-                                }
-                                
-                                # Save to S3
-                                forecast_name = f"{selected_file.split('.')[0]}_{target_col}_forecast"
-                                success = save_forecast(st.session_state.username, forecast_name, forecast_data)
-                                
-                                if success:
-                                    st.success(f"✅ Forecast saved to S3 bucket: {S3_BUCKET_NAME}")
-                                else:
-                                    st.error("❌ Failed to save forecast to S3")
-                            except Exception as e:
-                                st.error(f"❌ Error saving forecast: {str(e)}")
+                        # Removing this button and functionality as requested
+                        # if st.button("💾 Save Forecast to S3"):
+                        #     try:
+                        #         # Convert forecast to JSON serializable format
+                        #         forecast_data = {
+                        #             "forecast_dates": [str(date) for date in forecast['ds'].tolist()],
+                        #             "forecast_values": forecast['yhat'].tolist()],
+                        #             "lower_bound": forecast['yhat_lower'].tolist(),
+                        #             "upper_bound": forecast['yhat_upper'].tolist(),
+                        #             "target_column": target_col,
+                        #             "source_file": selected_file,
+                        #             "created_at": str(pd.Timestamp.now())
+                        #         }
+                        #         
+                        #         # Save to S3
+                        #         forecast_name = f"{selected_file.split('.')[0]}_{target_col}_forecast"
+                        #         success = save_forecast(st.session_state.username, forecast_name, forecast_data)
+                        #         
+                        #         if success:
+                        #             st.success(f"✅ Forecast saved to S3 bucket: {S3_BUCKET_NAME}")
+                        #         else:
+                        #             st.error("❌ Failed to save forecast to S3")
+                        #     except Exception as e:
+                        #         st.error(f"❌ Error saving forecast: {str(e)}")
                     
                     except Exception as e:
                         st.write("Prophet model failed, switching to Random Forest.")
@@ -561,6 +581,9 @@ if dataframes:
                             st.write(f"❌ Forecasting failed for `{selected_file}`.")
                             # st.write("Error:", str(e))
 
-
-st.write("")
-chatbot_section(dataframes, file_names, bedrock_client)
+# Show the chatbot only if files have been uploaded
+if dataframes:
+    st.write("")
+    chatbot_section(dataframes, file_names, bedrock_client)
+else:
+    st.info("📤 Please upload a dataset above to enable the AI chat assistant.")

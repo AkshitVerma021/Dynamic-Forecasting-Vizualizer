@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import streamlit as st
 import logging
+import time
 from auth import increment_usage, DATA_DIR
 from s3_storage import load_chat_history, save_chat_history, delete_chat_history
 
@@ -94,10 +95,15 @@ def query_bedrock_stream(user_input, df, bedrock_client):
     df_sample = df.head(5).to_string()
     df_summary = df.describe().to_string()
     
+    # Enhanced prompt focused on file uploads and data analysis with improved response quality
     prompt = f"""
-    You are a helpful AI data analyst. The user has asked about a dataset.
+    You are a professional data analyst assistant specialized in file uploads and data processing. You provide insightful, accurate, and business-focused responses about datasets.
 
     Dataset Information:
+    - Filename: {getattr(df, '_filename', 'Uploaded dataset')}
+    - Format: {getattr(df, '_format', 'CSV/Excel/Other')}
+    - Number of Rows: {len(df)}
+    - Number of Columns: {len(df.columns)}
     - Columns: {', '.join(df.columns)}
     
     Sample Data (first 5 rows):
@@ -108,10 +114,20 @@ def query_bedrock_stream(user_input, df, bedrock_client):
     
     User's Question: {user_input}
     
-    Please provide a clear, well-formatted response in plain text with:
-    - A direct answer to the question
-    - Relevant insights from the data
-    - Simple formatting using bullet points or numbered lists when helpful
+    Provide a concise, professional response that:
+    1. Directly answers the question with precision and clarity
+    2. Offers data-driven insights relevant to the user's specific query
+    3. Highlights important patterns or anomalies in the dataset when relevant
+    4. Provides practical recommendations for data optimization or analysis
+    5. Maintains a helpful, business-oriented tone throughout
+    
+    For file upload questions:
+    - Be specific about supported formats (CSV, XLS, XLSX, JSON, PARQUET, PDF)
+    - Mention the 5MB file size limit when relevant
+    - Explain data validation processes
+    - Suggest best practices for data preparation
+
+    Structure your response with clear paragraphs, bullet points for lists, and emphasize key insights.
     """
 
     payload = {
@@ -170,25 +186,29 @@ def chatbot_section(dataframes, file_names, bedrock_client):
         if not st.session_state.messages:
             st.session_state.messages.append({
                 "role": "assistant", 
-                "content": "Hello! I'm your data assistant. Ask me anything about your datasets."
+                "content": "Hello! I'm your professional data assistant. I can help you with file uploads, data analysis, and insights. How can I assist you today?"
             })
+    
+    # Place the Clear Conversation button in the sidebar
+    if st.sidebar.button("🧹 Clear Conversation", key="clear_chat_button"):
+        # Reset the usage tracking when chat is cleared
+        st.session_state.chat_submission_counted = False
+        clear_user_chat_history(username)
 
-    # Display chat messages
+    # Display all chat messages first
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-
-    # Chat input form
-    with st.form("chat_form"):
-        user_input = st.text_input("Ask a question about your dataset:", key="chat_input")
-        submitted = st.form_submit_button("Submit")
-
+    
+    # Chat input
+    user_input = st.chat_input("Ask me about your uploaded files or data analysis...")
+    
     # Initialize usage tracking for chat
     if "chat_submission_counted" not in st.session_state:
         st.session_state.chat_submission_counted = False
 
     # Process when submitted
-    if submitted and user_input.strip():
+    if user_input:
         if not dataframes:
             st.error("Please upload at least one dataset first.")
             return
@@ -201,16 +221,40 @@ def chatbot_section(dataframes, file_names, bedrock_client):
         # Add user message to chat
         st.session_state.messages.append({"role": "user", "content": user_input})
         
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        
         # Get selected dataset
-        selected_df_index = st.selectbox("Select Dataset to Query", file_names, key="dataset_select")
-        selected_df = dataframes[file_names.index(selected_df_index)]
+        if len(dataframes) > 1:
+            selected_df_index = st.selectbox("Select Dataset to Query", file_names, key="dataset_select")
+            selected_df = dataframes[file_names.index(selected_df_index)]
+        else:
+            selected_df = dataframes[0]
+            # Add filename attribute to dataframe
+            selected_df._filename = file_names[0]
+            selected_df._format = file_names[0].split('.')[-1].upper()
         
-        # Get and display response
-        with st.spinner("Analyzing your data..."):
-            response_text = query_bedrock_stream(user_input, selected_df, bedrock_client)
+        # Generate assistant response with streaming effect
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+            
+            # Get the complete response
+            with st.spinner("Analyzing your data..."):
+                complete_response = query_bedrock_stream(user_input, selected_df, bedrock_client)
+            
+            # Simulate streaming by gradually revealing the response
+            for i in range(len(complete_response) + 1):
+                full_response = complete_response[:i]
+                response_placeholder.markdown(full_response + "▌" if i < len(complete_response) else full_response)
+                if i < len(complete_response):
+                    # Adjust delay for realistic typing speed (slower for longer responses)
+                    st.session_state["_delay"] = 0.01 if len(complete_response) > 500 else 0.03
+                    time.sleep(st.session_state["_delay"])
         
-        # Add assistant response
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        # Add assistant response to state after streaming finishes
+        st.session_state.messages.append({"role": "assistant", "content": complete_response})
         
         # Save to history (convert messages to history format)
         history = []
@@ -223,10 +267,3 @@ def chatbot_section(dataframes, file_names, bedrock_client):
                 })
         
         save_user_chat_history(username, history[-10:])  # Keep last 10 conversations
-        st.rerun()
-
-    # Clear chat button
-    if st.button("🧹 Clear Conversation", key="clear_chat_button"):
-        # Reset the usage tracking when chat is cleared
-        st.session_state.chat_submission_counted = False
-        clear_user_chat_history(username)

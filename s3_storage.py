@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # S3 Bucket Configuration
-S3_BUCKET_NAME = "data-forecast-chatbot"
+S3_BUCKET_NAME = "cheque-upload-akshit"
 
 # Define folder structure in S3
 USER_DATA_FOLDER = "user_data/"
