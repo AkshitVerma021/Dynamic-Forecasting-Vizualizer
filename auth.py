@@ -1,208 +1,101 @@
 import os
 import streamlit as st
 import json
-import hashlib
 import logging
-from s3_storage import load_user_data, save_user_data
+from db_storage import save_user_data
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create a local backup directory for fallback
+# Create a placeholder for the data directory (used by other modules)
 DATA_DIR = os.path.join(os.path.expanduser("~"), "persistent_data")
-os.makedirs(DATA_DIR, exist_ok=True)
 
-# Log the actual path for debugging
-logger.info(f"Local backup directory: {DATA_DIR}")
-
-# 📂 User Data File Location
-USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
-
-# 📝 Create users.json if it does not exist
-if not os.path.exists(USER_DATA_FILE):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump({}, f)
-
-# Log the actual path for debugging
-print(f"User data stored at: {USER_DATA_FILE}")
-
-# 🔐 Load Users from S3
-def load_users():
-    try:
-        # Try to load from S3
-        users = load_user_data()
-        logger.info("User data loaded from S3 successfully")
-        return users
-    except Exception as e:
-        logger.error(f"Error loading users from S3: {str(e)}")
-        logger.info("Falling back to local storage")
-        
-        # Fallback to local storage
-        USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
-        if not os.path.exists(USER_DATA_FILE):
-            with open(USER_DATA_FILE, "w") as f:
-                json.dump({}, f)
-        
-        try:
-            with open(USER_DATA_FILE, "r") as f:
-                return json.load(f)
-        except Exception as local_e:
-            logger.error(f"Error loading from local backup: {str(local_e)}")
-            return {}
-
-# 💾 Save Users to S3
-def save_users(users):
-    try:
-        # Try to save to S3
-        success = save_user_data(users)
-        if success:
-            logger.info("User data saved to S3 successfully")
-        else:
-            raise Exception("S3 save operation failed")
-    except Exception as e:
-        logger.error(f"Error saving users to S3: {str(e)}")
-        logger.info("Falling back to local storage")
-        
-        # Fallback to local storage
-        USER_DATA_FILE = os.path.join(DATA_DIR, "users.json")
-        try:
-            with open(USER_DATA_FILE, "w") as f:
-                json.dump(users, f)
-            logger.info("User data saved to local backup successfully")
-        except Exception as local_e:
-            logger.error(f"Error saving to local backup: {str(local_e)}")
-
-# 🔐 Hash Password for Security
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+# Default username for the application (no login required)
+DEFAULT_USERNAME = "default_user"
 
 # 🔑 User Authentication State
 def init_session_state():
+    # Set authenticated to True by default
     if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+        st.session_state.authenticated = True
+    
+    # Set default username
     if "username" not in st.session_state:
-        st.session_state.username = None
-    if "signup_mode" not in st.session_state:
-        st.session_state.signup_mode = False
+        st.session_state.username = DEFAULT_USERNAME
+    
+    # Initialize usage count (resets on app restart)
     if "usage_count" not in st.session_state:
         st.session_state.usage_count = 0
-    if "paid_user" not in st.session_state:
-        st.session_state.paid_user = False
-
-# 🔹 Authentication Page
-def login_page():
-    st.sidebar.subheader("🔑 User Authentication")
-    users = load_users()
-
-    # Toggle between Login and Sign Up
-    if st.sidebar.button("🔄 Switch to Sign Up" if not st.session_state.signup_mode else "🔄 Switch to Login"):
-        st.session_state.signup_mode = not st.session_state.signup_mode
-        st.rerun()
-
-    # 🎉 Sign Up Section
-    if st.session_state.signup_mode:
-        st.sidebar.subheader("📝 Sign Up")
-        new_username = st.sidebar.text_input("Choose a Username")
-        new_password = st.sidebar.text_input("Choose a Password", type="password")
-
-        if st.sidebar.button("✅ Sign Up"):
-            if new_username in users:
-                st.sidebar.error("🚨 Username already exists! Choose another.")
-            else:
-                users[new_username] = {
-                    "password": hash_password(new_password),
-                    "usage_count": 0,
-                    "paid_user": False
-                }
-                save_users(users)
-                st.sidebar.success("🎉 Account created successfully! Please log in.")
-                st.session_state.signup_mode = False
-                st.rerun()
-    else:
-        # 🔐 Login Section
-        st.sidebar.subheader("🔐 Login")
-        username = st.sidebar.text_input("Username")
-        password = st.sidebar.text_input("Password", type="password")
-
-        if st.sidebar.button("🔓 Login"):
-            if username in users:
-                # Check if the user data is in the old format (just password hash)
-                if isinstance(users[username], str):
-                    # Migrate user to new format
-                    if users[username] == hash_password(password):
-                        users[username] = {
-                            "password": users[username],
-                            "usage_count": 0,
-                            "paid_user": False
-                        }
-                        save_users(users)
-                        st.session_state.authenticated = True
-                        st.session_state.username = username
-                        st.session_state.usage_count = 0
-                        st.session_state.paid_user = False
-                        st.sidebar.success("✅ Login Successful!")
-                        st.rerun()
-                    else:
-                        st.sidebar.error("❌ Invalid username or password!")
-                # New format with usage tracking
-                elif users[username]["password"] == hash_password(password):
-                    st.session_state.authenticated = True
-                    st.session_state.username = username
-                    st.session_state.usage_count = users[username]["usage_count"]
-                    st.session_state.paid_user = users[username]["paid_user"]
-                    st.sidebar.success("✅ Login Successful!")
-                    st.rerun()
-                else:
-                    st.sidebar.error("❌ Invalid username or password!")
-            else:
-                st.sidebar.error("❌ Invalid username or password!")
-
-# 🔐 Sign Out Function
-def sign_out():
-    if st.session_state.authenticated and st.session_state.username:
-        # Save usage count before signing out
-        users = load_users()
-        if st.session_state.username in users:
-            if isinstance(users[st.session_state.username], dict):
-                users[st.session_state.username]["usage_count"] = st.session_state.usage_count
-                users[st.session_state.username]["paid_user"] = st.session_state.paid_user
-                save_users(users)
     
-    st.session_state.authenticated = False
-    st.session_state.username = None
+    if "paid_user" not in st.session_state:
+        st.session_state.paid_user = False  # Set to False to enable limits
+
+# 🔐 Check Authentication (now just a pass-through)
+def check_auth():
+    # Always proceed - no checks needed
+    pass
+
+# 🔐 Sign Out Function (kept for compatibility)
+def sign_out():
+    # Just reset to default state
+    st.session_state.username = DEFAULT_USERNAME
     st.session_state.usage_count = 0
-    st.session_state.paid_user = False
-    st.sidebar.success("👋 You have been signed out.")
     st.rerun()
 
-# 🔢 Track Usage Function
+# 🔢 Track Usage Function (simplified, no persistence)
 def increment_usage():
-    if st.session_state.authenticated and not st.session_state.paid_user:
-        users = load_users()
-        if st.session_state.username in users:
-            st.session_state.usage_count += 1
-            if isinstance(users[st.session_state.username], dict):
-                users[st.session_state.username]["usage_count"] = st.session_state.usage_count
-                save_users(users)
-                logger.info(f"Usage count incremented for {st.session_state.username}: {st.session_state.usage_count}")
+    # Just increment the usage count in session
+    st.session_state.usage_count += 1
+    logger.info(f"Usage count incremented: {st.session_state.usage_count}")
+    
+    # Save the updated usage count to the database
+    update_user_in_db()
 
-# 🛑 Check Usage Limits
+# 🛑 Check Usage Limits (limits to 6 uses, unless premium)
 def check_usage_limit():
     # Free usage limit
     FREE_USAGE_LIMIT = 6
     
-    if st.session_state.authenticated:
-        if st.session_state.paid_user:
-            return True
-        elif st.session_state.usage_count < FREE_USAGE_LIMIT:
-            return True
-        else:
-            return False
-    return False
+    # Premium users have unlimited access
+    if st.session_state.paid_user:
+        return True
+    
+    # Check if user has reached usage limit
+    if st.session_state.usage_count < FREE_USAGE_LIMIT:
+        return True
+    else:
+        return False
 
-# 🔐 Check Authentication Before Proceeding
-def check_auth():
-    if not st.session_state.authenticated:
-        login_page()
-        st.stop()
+# Save user data to database
+def update_user_in_db():
+    try:
+        # Debug output
+        print("=== DEBUG: update_user_in_db called ===")
+        print(f"Username: {st.session_state.username}")
+        print(f"Paid user: {st.session_state.paid_user}")
+        print(f"Usage count: {st.session_state.usage_count}")
+        
+        # Create a dictionary with just the user data we want to store
+        user_data = {
+            st.session_state.username: {
+                'password': 'none',  # Required field but not used for auth
+                'email': getattr(st.session_state, 'email', ''),  # Save email if exists
+                'paid_user': 1 if st.session_state.paid_user else 0,  # Convert boolean to integer
+                'usage_count': st.session_state.usage_count  # Save current usage count
+            }
+        }
+        
+        print(f"User data to save: {user_data}")
+        
+        # Save to database
+        success = save_user_data(user_data)
+        if success:
+            print("User data saved to database successfully")
+            logger.info(f"User data for {st.session_state.username} saved to database successfully")
+        else:
+            print("Failed to save user data to database")
+            logger.warning(f"Failed to save user data for {st.session_state.username} to database")
+    except Exception as e:
+        print(f"Error saving user data to database: {e}")
+        logger.error(f"Error saving user data to database: {e}")

@@ -5,85 +5,49 @@ import streamlit as st
 import logging
 import time
 from auth import increment_usage, DATA_DIR
-from s3_storage import load_chat_history, save_chat_history, delete_chat_history
+from db_storage import load_chat_history, save_chat_history, delete_chat_history
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 📂 Directory for local backup of Chat History
+# Reference to directory (kept for compatibility)
 CHAT_HISTORY_DIR = os.path.join(DATA_DIR, "chat_history")
-os.makedirs(CHAT_HISTORY_DIR, exist_ok=True)
-
-# Print the chat history location for debugging
-logger.info(f"Local chat history backup directory: {CHAT_HISTORY_DIR}")
-
-def get_local_chat_file(username):
-    """Get the local chat history file path for a user as backup"""
-    return os.path.join(CHAT_HISTORY_DIR, f"{username}_chat_history.json")
 
 def load_user_chat_history(username):
-    """Load chat history from S3 with local fallback"""
+    """Load chat history from database"""
     try:
-        # Try to load from S3
+        # Load from database
         chat_history = load_chat_history(username)
-        logger.info(f"Chat history for {username} loaded from S3 successfully")
+        logger.info(f"Chat history for {username} loaded from database successfully")
         return chat_history
     except Exception as e:
-        logger.error(f"Error loading chat history from S3: {str(e)}")
-        logger.info(f"Falling back to local storage for {username}'s chat history")
-        
-        # Fallback to local storage
-        local_file = get_local_chat_file(username)
-        if os.path.exists(local_file):
-            try:
-                with open(local_file, "r") as f:
-                    return json.load(f)
-            except Exception as local_e:
-                logger.error(f"Error loading chat history from local backup: {str(local_e)}")
-        
+        logger.error(f"Error loading chat history from database: {str(e)}")
         return []
 
 def save_user_chat_history(username, messages):
-    """Save chat history to S3 with local backup"""
+    """Save chat history to database"""
     try:
-        # Try to save to S3
+        # Save to PostgreSQL database
         success = save_chat_history(username, messages)
         if success:
-            logger.info(f"Chat history for {username} saved to S3 successfully")
+            logger.info(f"Chat history for {username} saved to database successfully")
         else:
-            raise Exception("S3 save operation failed")
+            logger.error("Database save operation failed")
     except Exception as e:
-        logger.error(f"Error saving chat history to S3: {str(e)}")
-        logger.info(f"Falling back to local storage for {username}'s chat history")
-        
-        # Fallback to local storage
-        local_file = get_local_chat_file(username)
-        try:
-            with open(local_file, "w") as f:
-                json.dump(messages, f)
-            logger.info(f"Chat history for {username} saved to local backup successfully")
-        except Exception as local_e:
-            logger.error(f"Error saving chat history to local backup: {str(local_e)}")
+        logger.error(f"Error saving chat history to database: {str(e)}")
 
 def clear_user_chat_history(username):
-    """Clear chat history from S3 and local backup"""
+    """Clear chat history from database"""
     try:
-        # Try to delete from S3
+        # Delete from database
         success = delete_chat_history(username)
         if success:
-            logger.info(f"Chat history for {username} deleted from S3 successfully")
+            logger.info(f"Chat history for {username} deleted from database successfully")
+        else:
+            logger.error(f"Failed to delete chat history for {username}")
     except Exception as e:
-        logger.error(f"Error deleting chat history from S3: {str(e)}")
-    
-    # Always try to clear local backup
-    local_file = get_local_chat_file(username)
-    if os.path.exists(local_file):
-        try:
-            os.remove(local_file)
-            logger.info(f"Chat history for {username} deleted from local backup successfully")
-        except Exception as e:
-            logger.error(f"Error deleting chat history from local backup: {str(e)}")
+        logger.error(f"Error deleting chat history from database: {str(e)}")
     
     st.session_state.messages = []
     st.success("✅ Chat history cleared!")
@@ -137,7 +101,7 @@ def query_bedrock_stream(user_input, df, bedrock_client):
         "body": {
             "inputText": prompt[:4000],
             "textGenerationConfig": {
-                "maxTokenCount": 1024,
+                "maxTokenCount": 500,
                 "stopSequences": [],
                 "temperature": 0.7,
                 "topP": 0.9
@@ -164,11 +128,7 @@ def query_bedrock_stream(user_input, df, bedrock_client):
 def chatbot_section(dataframes, file_names, bedrock_client):
     st.subheader("🤖 Chat with Your Dataset")
 
-    # Check authentication
-    if "username" not in st.session_state or not st.session_state.username:
-        st.warning("⚠️ Please log in to use the chatbot.")
-        return
-
+    # Use default username
     username = st.session_state.username
 
     # Initialize chat messages
