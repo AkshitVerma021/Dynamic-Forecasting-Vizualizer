@@ -19,6 +19,7 @@ from prophet import Prophet
 from plotly import graph_objs as go
 from db_storage import save_forecast, load_forecast, save_chat_history, load_chat_history
 from razorpay_payment import RazorpayPayment, display_payment_interface
+from streamlit_javascript import st_javascript
 query_params = st.query_params
 page = query_params.get("token", [])# default to '1'
  
@@ -27,10 +28,10 @@ page = query_params.get("token", [])# default to '1'
 if page:
     st.set_page_config(page_title="Second Page")
     st.title("Redirecting to main page...")
- 
+    st_javascript(f"""localStorage.setItem("user_token", "{page}");""")
     # JavaScript redirect using meta refresh
     st.markdown("""
-        <meta http-equiv="refresh" content="0; url=/" />
+        <meta http-equiv="refresh" content="1; url=/" />
     """, unsafe_allow_html=True)
     print("get token",page)
     st.session_state.page = page
