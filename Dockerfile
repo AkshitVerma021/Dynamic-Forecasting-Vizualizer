@@ -18,4 +18,4 @@ COPY . .
 EXPOSE 8501
  
 # Run the application
-CMD ["streamlit", "run", "main.py", "--server.address", "0.0.0.0"]
+CMD ["streamlit", "run", "main.py", "--server.maxUploadSize=5", "--server.port=8501", "--server.address=0.0.0.0"]
