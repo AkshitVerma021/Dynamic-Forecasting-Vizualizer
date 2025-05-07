@@ -4,10 +4,32 @@ import hashlib
 import time
 import logging
 import streamlit as st
+import os
 from auth import update_user_in_db
-
+from sqlalchemy import create_engine, text
+import os
+from dotenv import load_dotenv
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Add this after the imports to read and render the HTML template
+def render_payment_html():
+    """
+    Read the payment.html template and return it directly
+    """
+    try:
+        with open("payment.html", "r") as f:
+            html_content = f.read()
+        return html_content
+    except Exception as e:
+        logger.error(f"Error rendering payment HTML: {e}")
+        return f"""
+        <div style="padding: 20px; background-color: #f8f9fa; border-radius: 10px; text-align: center;">
+            <h3>Payment Page Error</h3>
+            <p>Error loading payment page: {str(e)}</p>
+            <p>Please try using one of the other payment methods.</p>
+        </div>
+        """
 
 class RazorpayPayment:
     def __init__(self, key_id, key_secret, amount, currency, company_name, description):
@@ -289,18 +311,98 @@ class RazorpayPayment:
 
 def display_payment_interface(razorpay_payment):
     """
-    Display Razorpay payment interface in Streamlit
+    Display the Razorpay payment interface
     
     Parameters:
     -----------
     razorpay_payment : RazorpayPayment
-        Initialized RazorpayPayment instance
-        
-    Returns:
-    --------
-    bool
-        True if payment is verified, False otherwise
+        RazorpayPayment instance with payment details
     """
+    try:
+        st.title("Upgrade to Premium")
+        
+        # Add benefits section for premium users
+        st.markdown("""
+        ### Premium Benefits:
+        
+        - ✅ **Unlimited forecasting** - No more usage limits
+        - ✅ **Priority support** - Get faster responses to your queries
+        - ✅ **Advanced forecasting models** - Access to more sophisticated models
+        - ✅ **Unlimited file uploads** - No file size or number restrictions
+        - ✅ **Enhanced visualizations** - Get more detailed and interactive charts
+        """)
+        
+        # Display payment options
+        st.markdown("### Payment Options")
+        
+        # Method 1: Use the HTML file directly
+        redirect_url = os.getenv("REDIRECT_URL", "https://d56b-180-151-27-150.ngrok-free.app")
+        st.markdown(
+            f"""
+            <a href="{redirect_url}/payment.html" target="_blank">
+                <button style="
+                    background-color: #17a7e0;
+                    color: white;
+                    border: none;
+                    width: 100%;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                ">
+                    Open Payment Page
+                </button>
+            </a>
+            """, unsafe_allow_html=True
+        )
+        
+        # Add direct Razorpay HTML link like in shikhar-main.py
+        st.markdown(
+            """
+            <a href="http://127.0.0.1:5500/chatbot/razorpay-payment.html" target="_blank">
+                <button style="
+                    background-color: #17a7e0;
+                    color: white;
+                    border: none;
+                    width: 100%;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                ">
+                    Open Razorpay HTML
+                </button>
+            </a>
+            """, unsafe_allow_html=True
+        )
+        
+        # Method 2: Inline payment form
+        with st.expander("Or pay directly here"):
+            # Create order for direct payment
+            order = razorpay_payment.create_order(st.session_state.username)
+            
+            # Display payment button
+            payment_html = razorpay_payment.get_checkout_html(order["id"])
+            st.components.v1.html(payment_html, height=150)
+            
+            # Add option to use our custom HTML template
+            st.markdown("---")
+            st.markdown("### Alternative Payment Method")
+            
+            # Render the payment HTML template
+            st.components.v1.html(render_payment_html(), height=450)
+        
+        # Back button to return to main app
+        if st.button("← Back to App"):
+            st.session_state.show_payment_page = False
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error displaying payment interface: {str(e)}")
+    
     # Create order if not already created
     if "razorpay_order_id" not in st.session_state:
         try:
@@ -309,7 +411,6 @@ def display_payment_interface(razorpay_payment):
             st.session_state.razorpay_order_id = order['id']
         except Exception as e:
             st.error(f"Failed to create Razorpay order: {str(e)}")
-            return False
     
     # Initialize payment verification status
     if "payment_verified" not in st.session_state:
@@ -340,12 +441,8 @@ def display_payment_interface(razorpay_payment):
             try:
                 # Save premium status to database
                 logger.info("Payment verified. Updating user to premium status.")
-                update_user_in_db()
-                # Double-check that the update was successful
-                from sqlalchemy import create_engine, text
-                import os
-                from dotenv import load_dotenv
-                
+                update_user_in_db()                
+        
                 # Load environment variables
                 load_dotenv()
                 

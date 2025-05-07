@@ -13,37 +13,128 @@ from dotenv import load_dotenv
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
-from auth import init_session_state, check_auth, sign_out, increment_usage, check_usage_limit, DATA_DIR, update_user_in_db
+from auth import init_session_state, check_auth, sign_out, increment_usage, check_usage_limit, DATA_DIR, update_user_in_db, set_subscription_expiration, get_premium_status
 from chatbot import chatbot_section  
 from prophet import Prophet
 from plotly import graph_objs as go
-from db_storage import save_forecast, load_forecast, save_chat_history, load_chat_history
+from db_storage import save_forecast, load_forecast, save_chat_history, load_chat_history, save_transaction
 from razorpay_payment import RazorpayPayment, display_payment_interface
 from streamlit_javascript import st_javascript
-query_params = st.query_params
-page = query_params.get("token", [])# default to '1'
- 
- 
+import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+import boto3
+import psycopg2
 
-if page:
-    st.set_page_config(page_title="Second Page")
-    st.title("Redirecting to main page...")
-    st_javascript(f"""localStorage.setItem("user_token", "{page}");""")
-    # JavaScript redirect using meta refresh
-    st.markdown("""
-        <meta http-equiv="refresh" content="1; url=/" />
-    """, unsafe_allow_html=True)
-    print("get token",page)
-    st.session_state.page = page
-    print("page",st.session_state.page)
-    st.stop()  # Prevent rest of the script from running
+# Load environment variables
+load_dotenv()
+
+# Get secret key from environment variables
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+query_params = st.query_params
+token = query_params.get("token", "")
+ 
+# Payment success parameters
+payment_success = query_params.get("payment", "")
+txn_id = query_params.get("transaction_id", "")
+name = query_params.get("name", "")
+email = query_params.get("email", "")
+phone = query_params.get("phone", "")
+
+# Initialize payment processed flag
+if "payment_processed" not in st.session_state:
+    st.session_state.payment_processed = False
+
+# Handle payment success redirect
+if payment_success == "success" and txn_id and not st.session_state.payment_processed:
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            dbname=os.getenv("DB_NAME")
+        )
+        cursor = conn.cursor()
+        # insert_query = """
+        #     INSERT INTO transactions(name, email, phone, txn_id)
+        #     VALUES (%s, %s, %s, %s)
+        # """
+        insert_query = """
+            INSERT INTO bbt_premiumusers(name, email, phone, txn_id)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (name, email, phone, txn_id))
+        conn.commit()
+        conn.close()
+        st.session_state.user_name = name
+        # st.session_state.user_email = email
+ 
+        st.session_state.premium_user = True
+        st.session_state.payment_processed = True  
+        st.success("✅ Payment successful. Premium features unlocked!")
+        st_javascript("window.history.replaceState({}, document.title, window.location.pathname);")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Error processing payment: {str(e)}")
+        st.stop()
+
+if token:
+    try:
+        # Store token and name in localStorage
+        st_javascript(f"localStorage.setItem('user_token', '{token}');")
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        name = decoded.get("name", "Unknown User")
+        st_javascript(f"localStorage.setItem('user_name', '{name}');")
+ 
+        # Set session state
+        st.session_state.user_name = name
+        st.session_state.user_email = decoded.get("email", "No Email")
+        st.session_state.premium_user = True
+ 
+        # Redirect after 1 second
+        st.title("Authenticating...")
+        st.markdown("""<meta http-equiv='refresh' content='1; url=/' />""", unsafe_allow_html=True)
+        st.stop()
+ 
+    except ExpiredSignatureError:
+        st.error("Session expired. Please login again.")
+        st.stop()
+    except InvalidTokenError:
+        st.error("Invalid token. Please login again.")
+        st.stop()
+ 
 else:
+    st.set_page_config(page_title="Data-Forecasting-chatbot")
+    print("debug")
+
+    name = "Unknown User"  # Default
+
+    # Try getting token and name from localStorage
+    token_js = st_javascript("await localStorage.getItem('user_token');")
+    name_js = st_javascript("await localStorage.getItem('user_name');")
+
+    if token_js:
+        try:
+            decoded = jwt.decode(token_js, SECRET_KEY, algorithms=["HS256"])
+            name = decoded.get("name", name_js or "Unknown User")  # fallback to localStorage name
+            st.session_state.user_name = name
+            st.session_state.user_email = decoded.get("email", "No Email")
+            st.session_state.premium_user = True
+        except ExpiredSignatureError:
+            st.error("Session expired. Please login again.")
+            st.stop()
+        except InvalidTokenError:
+            st.error("Invalid token. Please login again.")
+            st.stop()
+    else:
+        # If no token, fallback to name from localStorage (if any)
+        if name_js:
+            st.session_state.user_name = name_js
+            name = name_js
+
     # Set up logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-
-    # Load environment variables from .env file
-    load_dotenv()
 
     # Razorpay Configuration from environment variables
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
@@ -62,9 +153,6 @@ else:
         company_name=RAZORPAY_COMPANY_NAME,
         description=RAZORPAY_DESCRIPTION
     )
-
-    # 📌 Set Streamlit Page Config (MUST BE FIRST!)
-    st.set_page_config(page_title="AI-Powered Data Analysis and Forecasting", layout="centered")
 
     # 📸 Add Company Logo at the Top
     st.markdown(
@@ -147,14 +235,19 @@ else:
     # Log storage information
     logger.info("Using PostgreSQL database for storage")
 
-    # 🗄 Define Storage Directories - keep this as a placeholder but don't use for storage
-    # STORAGE_DIR = os.path.join(DATA_DIR, "saved_forecasts")
-    # MODEL_DIR = os.path.join(DATA_DIR, "saved_models")
-    # CHAT_HISTORY_DIR = os.path.join(DATA_DIR, "chat_history")
+    # Initialize required session keys
+    required_session_keys = {
+        "user_name": name,
+        "premium_user": False,
+        "chat_history": [],
+    }
+
+    for key, default_value in required_session_keys.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
 
     # 🔑 Initialize Session State
     init_session_state()
-
 
     # 🔐 Check Authentication (now just passes through)
     check_auth()
@@ -162,7 +255,6 @@ else:
     # 📍 AWS Bedrock Client Initialization
     def get_bedrock_client():
         try:
-            import boto3
             return boto3.client(service_name="bedrock-runtime", region_name="ap-south-1")
         except ImportError:
             logger.warning("boto3 not installed, Bedrock functionality will not work")
@@ -202,36 +294,30 @@ else:
     remaining_uses = max(0, FREE_USAGE_LIMIT - st.session_state.usage_count)
 
     # Show premium badge or remaining usage
-    if st.session_state.paid_user:
-        st.sidebar.success("💎 Premium User - Unlimited Access")
+    if st.session_state.paid_user or st.session_state.get("premium_user", False):
+        # Get premium status info
+        premium_status = get_premium_status()
+        
+        if premium_status["active"]:
+            st.sidebar.success(f"💎 Premium Active")
+            # st.sidebar.info(f"⏱️ Time Remaining: {premium_status['expires_in']}")
+            st.sidebar.info(f"🔄 Uses Remaining: {premium_status['uses_remaining']}/{premium_status['max_uses']}")
+        else:
+            # Premium flag is set but status check shows it's expired/used up
+            st.sidebar.warning("⚠️ Premium access expired")
+            st.sidebar.info(f"🔄 {remaining_uses} free uses remaining")
     else:
         if remaining_uses > 0:
             st.sidebar.info(f"🔄 {remaining_uses} free uses remaining")
         else:
             st.sidebar.warning("⚠️ Free usage limit reached")
 
+    # Show welcome message with user's name
+    st.sidebar.markdown(f"### Welcome, {st.session_state.user_name}! 👋")
+
     # Add Sign-Out Button in the sidebar (moved before Premium button)
-    st.sidebar.markdown(
-        """
-        <a href="https://www.bellblazetech.com/our-solutions" target="_blank">
-            <button style="
-                background-color: #17a7e0;
-                color: white;
-                border: none;
-                width: 100%;
-                padding: 8px 15px;
-                margin-top: 10px;
-                margin-bottom: 10px;
-                border-radius: 5px;
-                font-weight: bold;
-                cursor: pointer;
-            ">
-                Sign Out
-            </button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
+    if st.sidebar.button("Sign Out", use_container_width=True):
+        sign_out()
 
     # Function to toggle payment page
     def toggle_payment_page():
@@ -244,7 +330,87 @@ else:
                 st.session_state.return_from_payment = False
 
     # Add subscription button after Sign Out
-    st.sidebar.button("💎 Upgrade to Premium", on_click=toggle_payment_page, use_container_width=True)
+    # st.sidebar.button("💎 Upgrade to Premium", on_click=toggle_payment_page, use_container_width=True)
+    
+    # # Add payment options header
+    # st.sidebar.markdown("### Payment Options")
+    
+    # Add direct link to payment HTML using ngrok URL
+    # ngrok_url = os.getenv("REDIRECT_URL", "http://localhost:8501")
+    # st.sidebar.markdown(
+    #     f"""
+    #     <a href="{ngrok_url}/payment.html" target="_blank">
+    #         <button style="
+    #             background-color: #17a7e0;
+    #             color: white;
+    #             border: none;
+    #             width: 100%;
+    #             padding: 8px 15px;
+    #             margin-top: 5px;
+    #             border-radius: 5px;
+    #             font-weight: bold;
+    #             cursor: pointer;
+    #         ">
+    #             💳 Direct Payment
+    #         </button>
+    #     </a>
+    #     """,
+    #     unsafe_allow_html=True
+    # )
+    
+    # Add direct link to HTML payment page using http
+    st.sidebar.markdown(
+        """
+        <a href="http://127.0.0.1:5500/payment.html" target="_blank">
+            <button style="
+                background-color: #17a7e0;
+                color: white;
+                border: none;
+                width: 100%;
+                padding: 8px 15px;
+                margin-top: 5px;
+                border-radius: 5px;
+                font-weight: bold;
+                cursor: pointer;
+            ">
+                💳 Upgrade to Premium
+            </button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # # Add direct link using file:// protocol
+    # current_dir = os.path.dirname(os.path.abspath(__file__))
+    # payment_file_path = os.path.join(current_dir, "payment.html")
+    
+    # st.sidebar.markdown(
+    #     f"""
+    #     <a href="file://{payment_file_path}" target="_blank">
+    #         <button style="
+    #             background-color: #17a7e0;
+    #             color: white;
+    #             border: none;
+    #             width: 100%;
+    #             padding: 8px 15px;
+    #             margin-top: 5px;
+    #             border-radius: 5px;
+    #             font-weight: bold;
+    #             cursor: pointer;
+    #         ">
+    #             💳 Direct File Path
+    #         </button>
+    #     </a>
+    #     """,
+    #     unsafe_allow_html=True
+    # )
+
+    # # Add direct Razorpay payment button like in shikhar-main.py
+    # if st.sidebar.button("💳 Razorpay Direct Payment"):
+    #     st.markdown(
+    #         """<meta http-equiv='refresh' content='0; url=http://127.0.0.1:5500/payment.html' />""",
+    #         unsafe_allow_html=True
+    #     )
 
     # Display payment page if toggled
     if st.session_state.show_payment_page:
@@ -252,29 +418,40 @@ else:
         with st.sidebar:
             st.markdown("## 💳 Upgrade to Premium")
             st.markdown("""
-            ### Benefits of Premium:
+            ### Premium Plan Benefits:
             - ✅ Unlimited data analysis
             - ✅ Priority support
             - ✅ Advanced forecasting models
+            - ✅ Unlimited file uploads
+            - ✅ Enhanced visualizations
             """)
             
-            # Display Razorpay payment interface
-            payment_verified = display_payment_interface(razorpay_payment)
+            # Add direct link to HTML payment page
+            # st.markdown(
+            #     """
+            #     <a href="http://127.0.0.1:5500/payment.html" target="_blank">
+            #         <button style="
+            #             background-color: #17a7e0;
+            #             color: white;
+            #             border: none;
+            #             width: 100%;
+            #             padding: 8px 15px;
+            #             margin-top: 5px;
+            #             border-radius: 5px;
+            #             font-weight: bold;
+            #             cursor: pointer;
+            #         ">
+            #             💳 Upgrade Now
+            #         </button>
+            #     </a>
+            #     """,
+            #     unsafe_allow_html=True
+            # )
             
-            # If payment is verified, set user as premium and close payment page
-            if payment_verified:
-                st.session_state.paid_user = True
-                # Save premium status to database
-                update_user_in_db()
-                st.session_state.show_payment_page = False
-                st.session_state.return_from_payment = True
-                st.success("🎉 Payment completed successfully! You now have premium access.")
-                st.balloons()
-                time.sleep(1)
-                st.rerun()
-        
-        # Don't stop execution when payment page is in sidebar
-        # This allows the main content to still be visible
+            # # Close payment page button
+            # if st.button("Close", use_container_width=True):
+            #     st.session_state.show_payment_page = False
+            #     st.rerun()
 
     # 📚 Load Uploaded Files
     dataframes = []
@@ -363,7 +540,7 @@ else:
 
     else:
         # If user has reached the limit, show upgrade message
-        st.warning("⚠️ You've reached your free usage limit (6 uses). Please upgrade to continue using the application.")
+        st.warning("⚠️ You've reached your free usage limit. Please upgrade to continue using the application.")
         
         # Force show the payment page
         if not st.session_state.show_payment_page:
