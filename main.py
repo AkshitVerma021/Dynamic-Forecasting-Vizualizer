@@ -93,7 +93,7 @@ if token:
  
         # Redirect after 1 second
         st.title("Authenticating...")
-        st.markdown("""<meta http-equiv='refresh' content='1; url=/' />""", unsafe_allow_html=True)
+        st.markdown("""<meta http-equiv="refresh" content="1; url=/dataforecast-chatbot/" />""", unsafe_allow_html=True)
         st.stop()
  
     except ExpiredSignatureError:
