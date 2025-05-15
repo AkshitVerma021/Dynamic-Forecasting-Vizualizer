@@ -8,6 +8,7 @@ from streamlit_javascript import st_javascript
 from db_storage import save_user_data
 import time
 from datetime import datetime, timedelta
+import psycopg2
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -63,33 +64,66 @@ def init_session_state():
 def check_auth():
     # Try getting token from localStorage if not already authenticated
     if not st.session_state.get("authenticated", False):
-        token_js = st_javascript("await localStorage.getItem('user_token');")
-        name_js = st_javascript("await localStorage.getItem('user_name');")
+        token_js = st_javascript("await localStorage.getItem('user_token');", key="get_token_js")
+        name_js = st_javascript("await localStorage.getItem('user_name');", key="get_name_js")
         
         if token_js:
             try:
                 decoded = jwt.decode(token_js, SECRET_KEY, algorithms=["HS256"])
-                st.session_state.user_name = decoded.get("name", name_js or "Unknown User")
-                st.session_state.username = st.session_state.user_name  # For backward compatibility
-                st.session_state.user_email = decoded.get("email", "No Email")
-                st.session_state.premium_user = True
-                st.session_state.paid_user = True
+                username = decoded.get("name", name_js or "Unknown User")
+                email = decoded.get("email", "No Email")
+                
+                # Set basic user information
+                st.session_state.user_name = username
+                st.session_state.username = username  # For backward compatibility
+                st.session_state.user_email = email
                 st.session_state.authenticated = True
                 
-                # Set subscription expiration if not already set
-                if not st.session_state.subscription_expires_at:
-                    set_subscription_expiration()
+                # Check if user has made payment by looking in database
+                is_premium = check_premium_status_in_db(email=email, name=username)
                 
-                logger.info(f"User authenticated via token: {st.session_state.user_name}")
+                if is_premium:
+                    st.session_state.premium_user = True
+                    st.session_state.paid_user = True
+                    
+                    # Set subscription expiration if not already set
+                    if not st.session_state.subscription_expires_at:
+                        set_subscription_expiration()
+                        
+                    logger.info(f"Premium access granted to user: {username}")
+                else:
+                    # Not a premium user
+                    st.session_state.premium_user = False
+                    st.session_state.paid_user = False
+                    logger.info(f"User authenticated with standard access: {username}")
+                
             except (ExpiredSignatureError, InvalidTokenError) as e:
                 logger.warning(f"Token validation failed: {str(e)}")
                 # Clear invalid token
-                st_javascript("localStorage.removeItem('user_token');")
-                st_javascript("localStorage.removeItem('user_name');")
+                st_javascript("localStorage.removeItem('user_token');", key="remove_token_js")
+                st_javascript("localStorage.removeItem('user_name');", key="remove_name_js")
         elif name_js:
             # If we have a name but no token, use the name
             st.session_state.user_name = name_js
             st.session_state.username = name_js  # For backward compatibility
+            
+            # Check if this user has premium status
+            is_premium = check_premium_status_in_db(name=name_js)
+            
+            if is_premium:
+                st.session_state.premium_user = True
+                st.session_state.paid_user = True
+                
+                # Set subscription expiration if not already set
+                if not st.session_state.subscription_expires_at:
+                    set_subscription_expiration()
+                    
+                logger.info(f"Premium access granted to user by name: {name_js}")
+            else:
+                # Not a premium user
+                st.session_state.premium_user = False
+                st.session_state.paid_user = False
+                
             logger.info(f"Using name from localStorage: {name_js}")
     
     # Check if premium subscription has expired
@@ -132,8 +166,8 @@ def set_subscription_expiration():
 # 🔐 Sign Out Function
 def sign_out():
     # Clear localStorage
-    st_javascript("localStorage.removeItem('user_token');")
-    st_javascript("localStorage.removeItem('user_name');")
+    st_javascript("localStorage.removeItem('user_token');", key="signout_remove_token")
+    st_javascript("localStorage.removeItem('user_name');", key="signout_remove_name")
     
     # Reset session state
     st.session_state.user_name = DEFAULT_USERNAME
@@ -144,6 +178,9 @@ def sign_out():
     st.session_state.usage_count = 0
     st.session_state.premium_usage_count = 0
     st.session_state.subscription_expires_at = None
+    
+    # Set direct redirect flag
+    st.session_state.direct_redirect = True
     
     logger.info("User signed out")
     st.rerun()
@@ -253,3 +290,57 @@ def update_user_in_db():
     except Exception as e:
         print(f"Error saving user data to database: {e}")
         logger.error(f"Error saving user data to database: {e}")
+
+# Check if user has premium status in database
+def check_premium_status_in_db(email=None, name=None):
+    """
+    Check if a user has premium status by verifying payment in the database
+    Returns True if premium user found, False otherwise
+    """
+    try:
+        # Only proceed if we have at least one identifier
+        if not email and not name:
+            logger.warning("Cannot check premium status without email or name")
+            return False
+            
+        # Check for premium status in database
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            dbname=os.getenv("DB_NAME")
+        )
+        cursor = conn.cursor()
+        
+        # Check the premium users table
+        search_query = """
+            SELECT * FROM bbt_premiumusers 
+            WHERE 1=1
+        """
+        
+        params = []
+        
+        # Add conditions based on available identifiers
+        if email:
+            search_query += " AND email = %s"
+            params.append(email)
+        
+        if name:
+            search_query += " AND name = %s"
+            params.append(name)
+            
+        cursor.execute(search_query, params)
+        result = cursor.fetchone()
+        conn.close()
+        
+        # If we find a record, user has premium access
+        if result:
+            logger.info(f"Premium user found in database: {name or email}")
+            return True
+        else:
+            logger.info(f"No premium record found for user: {name or email}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error checking premium status in database: {e}")
+        return False
