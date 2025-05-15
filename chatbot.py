@@ -226,4 +226,4 @@ def chatbot_section(dataframes, file_names, bedrock_client):
                     "timestamp": str(pd.Timestamp.now())
                 })
         
-        save_user_chat_history(username, history[-10:])  # Keep last 10 conversations
+        save_user_chat_history(username, history[-10:])
