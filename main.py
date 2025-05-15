@@ -25,6 +25,112 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 import boto3
 import psycopg2
 
+# Check for direct redirect flag (immediate redirect to Bell Blaze Tech)
+if 'direct_redirect' in st.session_state and st.session_state.direct_redirect:
+    # Clear the flag
+    st.session_state.direct_redirect = False
+    
+    # Add a Javascript redirect, a meta refresh, and an HTML anchor with auto-click
+    st.markdown(
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="refresh" content="0; url=https://www.bellblazetech.com/our-solutions">
+        </head>
+        <body>
+            <a id="redirect-link" href="https://www.bellblazetech.com/our-solutions" style="display:none;">Redirect</a>
+            <script type="text/javascript">
+                window.top.location.href = "https://www.bellblazetech.com/our-solutions";
+                document.getElementById('redirect-link').click();
+            </script>
+            <p>Redirecting to Bell Blaze Tech...</p>
+        </body>
+        </html>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Fallback text in case HTML doesn't render
+    st.write("If you are not redirected automatically, please [click here](https://www.bellblazetech.com/our-solutions).")
+    st.stop()
+
+# Display sign-out page if needed
+if 'show_signout_page' in st.session_state and st.session_state.show_signout_page:
+    st.session_state.show_signout_page = False
+    
+    st.set_page_config(page_title="Signed Out")
+    
+    # Center content
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.title("You have been signed out")
+        st.write("Thank you for using our application!")
+        
+        # Direct link button
+        st.markdown(
+            """
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="https://www.bellblazetech.com/our-solutions" target="_self">
+                    <button style="
+                        background-color: #17a7e0;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        text-align: center;
+                        text-decoration: none;
+                        display: inline-block;
+                        font-size: 16px;
+                        margin: 4px 2px;
+                        cursor: pointer;
+                        border-radius: 4px;
+                    ">
+                        Continue to Bell Blaze Tech
+                    </button>
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Add JavaScript redirect with delay
+        st.markdown(
+            """
+            <script>
+            setTimeout(function() {
+                window.top.location.href = 'https://www.bellblazetech.com/our-solutions';
+            }, 3000);
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    st.stop()
+
+# Check if redirect flag is set
+if 'redirect_to_bellblaze' in st.session_state and st.session_state.redirect_to_bellblaze:
+    # Clear the flag
+    st.session_state.redirect_to_bellblaze = False
+    # Perform the redirect
+    st.markdown(
+        """
+        <script language="javascript">
+        window.top.location.href = "https://www.bellblazetech.com/our-solutions";
+        </script>
+        """,
+        unsafe_allow_html=True
+    )
+    # Also add a meta tag for browsers that block scripts
+    st.markdown(
+        """
+        <meta http-equiv="refresh" content="0; url=https://www.bellblazetech.com/our-solutions" />
+        """,
+        unsafe_allow_html=True
+    )
+    st.write("Redirecting to Bell Blaze Tech website...")
+    st.stop()
+
 # Load environment variables
 load_dotenv()
 
@@ -40,7 +146,8 @@ txn_id = query_params.get("transaction_id", "")
 name = query_params.get("name", "")
 email = query_params.get("email", "")
 phone = query_params.get("phone", "")
-
+app_id = st.query_params.get("app_id", "dataforecast-chatbot")
+order_id = txn_id
 # Initialize payment processed flag
 if "payment_processed" not in st.session_state:
     st.session_state.payment_processed = False
@@ -60,10 +167,10 @@ if payment_success == "success" and txn_id and not st.session_state.payment_proc
         #     VALUES (%s, %s, %s, %s)
         # """
         insert_query = """
-            INSERT INTO bbt_premiumusers(name, email, phone, txn_id)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO bbt_tempusers(name, email, phone, app_id, order_id)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (name, email, phone, txn_id))
+        cursor.execute(insert_query, (name, email, phone, app_id, order_id))
         conn.commit()
         conn.close()
         st.session_state.user_name = name
@@ -86,14 +193,27 @@ if token:
         name = decoded.get("name", "Unknown User")
         st_javascript(f"localStorage.setItem('user_name', '{name}');")
  
-        # Set session state
+        # Set session state for basic user info
         st.session_state.user_name = name
         st.session_state.user_email = decoded.get("email", "No Email")
-        st.session_state.premium_user = True
+        
+        # Default to free user - premium should only be set after payment verification
+        st.session_state.premium_user = False
  
-        # Redirect after 1 second
+        # Redirect after 1 second using JavaScript to ensure it works across browsers
         st.title("Authenticating...")
-        st.markdown("""<meta http-equiv="refresh" content="1; url=/dataforecast-chatbot/" />""", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <script>
+            setTimeout(function() {{
+                window.location.href = "/dataforecast-chatbot/";
+            }}, 1000);
+            </script>
+            <meta http-equiv="refresh" content="1; url=/dataforecast-chatbot/" />
+            """, 
+            unsafe_allow_html=True
+        )
+        st.info("If you are not redirected automatically, please [click here](/dataforecast-chatbot/)")
         st.stop()
  
     except ExpiredSignatureError:
@@ -104,9 +224,11 @@ if token:
         st.stop()
  
 else:
-    st.set_page_config(page_title="Data-Forecasting-chatbot")
-    print("debug")
+    S3_BUCKET = "data-forecast-chatbot"
+    s3_client = boto3.client("s3")
 
+    st.set_page_config(page_title="Data-Forecasting-chatbot")
+    
     name = "Unknown User"  # Default
 
     # Try getting token and name from localStorage
@@ -119,7 +241,10 @@ else:
             name = decoded.get("name", name_js or "Unknown User")  # fallback to localStorage name
             st.session_state.user_name = name
             st.session_state.user_email = decoded.get("email", "No Email")
-            st.session_state.premium_user = True
+            
+            # Do not automatically set premium access
+            # We will check payment status separately
+            # st.session_state.premium_user = True
         except ExpiredSignatureError:
             st.error("Session expired. Please login again.")
             st.stop()
@@ -329,129 +454,28 @@ else:
             if 'return_from_payment' not in st.session_state:
                 st.session_state.return_from_payment = False
 
-    # Add subscription button after Sign Out
-    # st.sidebar.button("💎 Upgrade to Premium", on_click=toggle_payment_page, use_container_width=True)
-    
-    # # Add payment options header
-    # st.sidebar.markdown("### Payment Options")
-    
-    # Add direct link to payment HTML using ngrok URL
-    # ngrok_url = os.getenv("REDIRECT_URL", "http://localhost:8501")
-    # st.sidebar.markdown(
-    #     f"""
-    #     <a href="{ngrok_url}/payment.html" target="_blank">
-    #         <button style="
-    #             background-color: #17a7e0;
-    #             color: white;
-    #             border: none;
-    #             width: 100%;
-    #             padding: 8px 15px;
-    #             margin-top: 5px;
-    #             border-radius: 5px;
-    #             font-weight: bold;
-    #             cursor: pointer;
-    #         ">
-    #             💳 Direct Payment
-    #         </button>
-    #     </a>
-    #     """,
-    #     unsafe_allow_html=True
-    # )
-    
-    # Add direct link to HTML payment page using http
-    st.sidebar.markdown(
+    import streamlit.components.v1 as components
+    st.sidebar.markdown("### 💎 Upgrade to Premium")
+    if st.sidebar.button("💳 Upgrade to Premium", use_container_width=True):
+        js = """
+            <script>
+            const token = localStorage.getItem('user_token');
+            if (!token) {
+                alert("No token found—please log in again.");
+            } else {
+                const params = new URLSearchParams({
+                app_id: "dataforecast-chatbot",
+                token: token
+                });
+                window.open(
+                "http://paymentdocumentchatbot.s3-website.ap-south-1.amazonaws.com/razorpay-payment/razorpay-payment.html?" + params.toString(),
+                "_blank"
+                );
+            }
+            </script>
         """
-        <a href="http://127.0.0.1:5500/payment.html" target="_blank">
-            <button style="
-                background-color: #17a7e0;
-                color: white;
-                border: none;
-                width: 100%;
-                padding: 8px 15px;
-                margin-top: 5px;
-                border-radius: 5px;
-                font-weight: bold;
-                cursor: pointer;
-            ">
-                💳 Upgrade to Premium
-            </button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
+        components.html(js, height=0, scrolling=False)
     
-    # # Add direct link using file:// protocol
-    # current_dir = os.path.dirname(os.path.abspath(__file__))
-    # payment_file_path = os.path.join(current_dir, "payment.html")
-    
-    # st.sidebar.markdown(
-    #     f"""
-    #     <a href="file://{payment_file_path}" target="_blank">
-    #         <button style="
-    #             background-color: #17a7e0;
-    #             color: white;
-    #             border: none;
-    #             width: 100%;
-    #             padding: 8px 15px;
-    #             margin-top: 5px;
-    #             border-radius: 5px;
-    #             font-weight: bold;
-    #             cursor: pointer;
-    #         ">
-    #             💳 Direct File Path
-    #         </button>
-    #     </a>
-    #     """,
-    #     unsafe_allow_html=True
-    # )
-
-    # # Add direct Razorpay payment button like in shikhar-main.py
-    # if st.sidebar.button("💳 Razorpay Direct Payment"):
-    #     st.markdown(
-    #         """<meta http-equiv='refresh' content='0; url=http://127.0.0.1:5500/payment.html' />""",
-    #         unsafe_allow_html=True
-    #     )
-
-    # Display payment page if toggled
-    if st.session_state.show_payment_page:
-        # Create a sidebar container for the payment interface
-        with st.sidebar:
-            st.markdown("## 💳 Upgrade to Premium")
-            st.markdown("""
-            ### Premium Plan Benefits:
-            - ✅ Unlimited data analysis
-            - ✅ Priority support
-            - ✅ Advanced forecasting models
-            - ✅ Unlimited file uploads
-            - ✅ Enhanced visualizations
-            """)
-            
-            # Add direct link to HTML payment page
-            # st.markdown(
-            #     """
-            #     <a href="http://127.0.0.1:5500/payment.html" target="_blank">
-            #         <button style="
-            #             background-color: #17a7e0;
-            #             color: white;
-            #             border: none;
-            #             width: 100%;
-            #             padding: 8px 15px;
-            #             margin-top: 5px;
-            #             border-radius: 5px;
-            #             font-weight: bold;
-            #             cursor: pointer;
-            #         ">
-            #             💳 Upgrade Now
-            #         </button>
-            #     </a>
-            #     """,
-            #     unsafe_allow_html=True
-            # )
-            
-            # # Close payment page button
-            # if st.button("Close", use_container_width=True):
-            #     st.session_state.show_payment_page = False
-            #     st.rerun()
 
     # 📚 Load Uploaded Files
     dataframes = []
