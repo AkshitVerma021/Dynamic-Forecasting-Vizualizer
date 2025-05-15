@@ -17,7 +17,7 @@
       background-size: 200px;
       opacity: 0.95;
     }
- 
+
     .payment-container {
       background: white;
       padding: 40px;
@@ -27,12 +27,12 @@
       max-width: 400px;
       text-align: center;
     }
- 
+
     .payment-container h2 {
       color: #333;
       margin-bottom: 20px;
     }
- 
+
     .payment-container input {
       width: 100%;
       padding: 12px;
@@ -41,7 +41,7 @@
       border-radius: 8px;
       font-size: 16px;
     }
- 
+
     .payment-container button {
       width: 100%;
       padding: 12px;
@@ -53,7 +53,7 @@
       cursor: pointer;
       transition: background-color 0.3s ease;
     }
- 
+
     .payment-container button:hover {
       background-color: #1490c2;
     }
@@ -69,13 +69,13 @@
       <button type="submit">Pay ₹1</button>
     </form>
   </div>
- 
+
   <script>
     function openRazorpay() {
       const name = document.getElementById("name").value;
       const email = document.getElementById("email").value;
       const phone = document.getElementById("phone").value;
- 
+
       const options = {
         key: "rzp_live_v6qAzViosoOdnK", // Using the key from shikhar-html.html
         amount: 100,
@@ -88,8 +88,8 @@
           contact: phone
         },
         handler: function (response) {
-          // Direct redirect to localhost
-          const redirectUrl = `https://d56b-180-151-27-150.ngrok-free.app/?payment=success&transaction_id=${response.razorpay_payment_id}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`;
+          // Direct redirect to elastic IP
+          const redirectUrl = `http://43.205.51.48:8502/dataforecast-chatbot/?payment=success&transaction_id=${response.razorpay_payment_id}&name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`;
           window.location.href = redirectUrl;
         },
         theme: {
@@ -101,4 +101,4 @@
     }
   </script>
 </body>
-</html> 
+</html>
