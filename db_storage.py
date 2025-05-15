@@ -99,17 +99,16 @@ class Model(Base):
     )
 
 class Transaction(Base):
-    __tablename__ = 'bbt_premiumusers'
+    __tablename__ = 'bbt_tempusers'
     
-    id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False)
-    phone = Column(String(50), nullable=True)
-    txn_id = Column(String(255), unique=True, nullable=False)
-    
+    phone = Column(Integer, nullable=True)
+    app_id = Column(String(255), nullable=False)
+    order_id = Column(String(255), nullable=False, primary_key=True)
     
     def __repr__(self):
-        return f"<Transaction(id={self.id}, name={self.name}, email={self.email}, txn_id={self.txn_id})>"
+        return f"<Transaction(name={self.name}, email={self.email}, phone={self.phone}, app_id={self.app_id}, order_id={self.order_id})>"
 
 # Function to initialize the database
 def initialize_database():
@@ -129,35 +128,56 @@ def save_user_data(users_dict):
     
     try:
         for username, user_data in users_dict.items():
-            # Check if user exists
-            user = session.query(User).filter_by(username=username).first()            
-            if user:
-                # Update existing user
-                user.password_hash = user_data.get('password', '')
-                user.email = user_data.get('email', '')
-                user.paid_user = user_data.get('paid_user', 0)
-                user.usage_count = user_data.get('usage_count', 0)
-                user.premium_usage_count = user_data.get('premium_usage_count', 0)
-                user.subscription_expires_at = user_data.get('subscription_expires_at', None)
-            else:
-                # Create new user
-                new_user = User(
-                    username=username,
-                    password_hash=user_data.get('password', ''),
-                    email=user_data.get('email', ''),
-                    paid_user=user_data.get('paid_user', 0),
-                    usage_count=user_data.get('usage_count', 0),
-                    premium_usage_count=user_data.get('premium_usage_count', 0),
-                    subscription_expires_at=user_data.get('subscription_expires_at', None)
-                )
-                session.add(new_user)
-        
-        session.commit()
-        logger.info("User data saved to database successfully")
+            try:
+                # Sanitize username and other values
+                sanitized_username = username.strip() if username else "default_user"
+                
+                # Log the attempt to save
+                logger.info(f"Saving data for user: {sanitized_username}")
+                
+                # Check if user exists
+                user = session.query(User).filter_by(username=sanitized_username).first()
+                
+                if user:
+                    # Update existing user
+                    logger.info(f"Updating existing user: {sanitized_username}")
+                    user.password_hash = user_data.get('password', '')
+                    user.email = user_data.get('email', '')
+                    user.paid_user = user_data.get('paid_user', 0)
+                    user.usage_count = user_data.get('usage_count', 0)
+                    user.premium_usage_count = user_data.get('premium_usage_count', 0)
+                    user.subscription_expires_at = user_data.get('subscription_expires_at', None)
+                else:
+                    # Create new user
+                    logger.info(f"Creating new user: {sanitized_username}")
+                    new_user = User(
+                        username=sanitized_username,
+                        password_hash=user_data.get('password', ''),
+                        email=user_data.get('email', ''),
+                        paid_user=user_data.get('paid_user', 0),
+                        usage_count=user_data.get('usage_count', 0),
+                        premium_usage_count=user_data.get('premium_usage_count', 0),
+                        subscription_expires_at=user_data.get('subscription_expires_at', None)
+                    )
+                    session.add(new_user)
+                
+                # Try to commit changes for this user
+                try:
+                    session.commit()
+                    logger.info(f"Successfully saved data for user: {sanitized_username}")
+                except Exception as user_error:
+                    session.rollback()
+                    logger.error(f"Error saving specific user {sanitized_username}: {str(user_error)}")
+                    # Continue with next user
+            except Exception as inner_error:
+                logger.error(f"Error processing user entry {username}: {str(inner_error)}")
+                # Continue with next user
+                
+        logger.info("User data save process completed")
         return True
     except Exception as e:
         session.rollback()
-        logger.error(f"Error saving user data to database: {e}")
+        logger.error(f"Error in overall save_user_data process: {str(e)}")
         return False
     finally:
         session.close()
@@ -408,16 +428,16 @@ def load_model(username, model_name):
         session.close()
 
 # Transaction functions
-def save_transaction(name, email, phone, txn_id):
+def save_transaction(name, email, phone, app_id, order_id):
     """Save transaction to PostgreSQL database"""
     session = Session()
     
     try:
         # Check if transaction exists
-        transaction = session.query(Transaction).filter_by(txn_id=txn_id).first()
+        transaction = session.query(Transaction).filter_by(app_id=app_id, order_id=order_id).first()
         
         if transaction:
-            logger.warning(f"Transaction {txn_id} already exists")
+            logger.warning(f"Transaction {app_id} {order_id} already exists")
             return False
         
         # Create new transaction
@@ -425,12 +445,13 @@ def save_transaction(name, email, phone, txn_id):
             name=name,
             email=email,
             phone=phone,
-            txn_id=txn_id
+            app_id=app_id,
+            order_id=order_id
         )
         session.add(new_transaction)
         session.commit()
         
-        logger.info(f"Transaction {txn_id} saved to database successfully")
+        logger.info(f"Transaction {app_id} {order_id} saved to database successfully")
         return True
     except Exception as e:
         session.rollback()
@@ -439,27 +460,26 @@ def save_transaction(name, email, phone, txn_id):
     finally:
         session.close()
 
-def get_transaction_by_id(txn_id):
+def get_transaction_by_id(app_id, order_id):
     """Get transaction by ID from PostgreSQL database"""
     session = Session()
     
     try:
-        transaction = session.query(Transaction).filter_by(txn_id=txn_id).first()
+        transaction = session.query(Transaction).filter_by(app_id=app_id, order_id=order_id).first()
         
         if not transaction:
-            logger.warning(f"Transaction {txn_id} not found")
+            logger.warning(f"Transaction {app_id} {order_id} not found")
             return None
         
         transaction_dict = {
-            'id': transaction.id,
             'name': transaction.name,
             'email': transaction.email,
             'phone': transaction.phone,
-            'txn_id': transaction.txn_id,
-            'timestamp': transaction.timestamp
+            'app_id': transaction.app_id,
+            'order_id': transaction.order_id
         }
         
-        logger.info(f"Transaction {txn_id} retrieved from database successfully")
+        logger.info(f"Transaction {app_id} {order_id} retrieved from database successfully")
         return transaction_dict
     except Exception as e:
         logger.error(f"Error retrieving transaction from database: {e}")
